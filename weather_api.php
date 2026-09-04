@@ -1,6 +1,6 @@
 <?php
  function getWeather($city = "Nairobi"){
-    $apiKey = "0cbe6dbb97ae2c61c6c962a4eae9afde"; // Replace with your valid OpenWeatherMap API key
+    $apiKey = getenv('OPENWEATHERMAP_API_KEY'); // Replace with your valid OpenWeatherMap API key
     $url = "https://api.openweathermap.org/data/2.5/weather?q=" . urlencode($city) . "&appid=$apiKey&units=metric";
 
     // Turn on error reporting (for debugging)
