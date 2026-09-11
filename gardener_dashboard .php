@@ -35,7 +35,51 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'gardener') {
 $user_id = $_SESSION['user_id'];
 $username = $_SESSION['username'];
 
-$weather = getWeather();
+$weather = null;
+// ===============================
+// BLOOMBOT CLIMATE INTELLIGENCE
+// ===============================
+$climate_intelligence = null;
+$climate_error = null;
+
+$intelligence_url = __DIR__ . '/climate_intelligence.php';
+
+if (file_exists($intelligence_url)) {
+
+    ob_start();
+
+    try {
+
+        include $intelligence_url;
+
+        $intelligence_output = ob_get_clean();
+
+        $climate_intelligence = json_decode(
+            trim($intelligence_output),
+            true
+        );
+
+        if (
+            !is_array($climate_intelligence) ||
+            ($climate_intelligence['status'] ?? '') !== 'success'
+        ) {
+            $climate_error = 'Climate intelligence returned an invalid response.';
+            $climate_intelligence = null;
+        }
+
+    } catch (Throwable $e) {
+
+        ob_end_clean();
+
+        $climate_error = 'Climate intelligence is temporarily unavailable.';
+        $climate_intelligence = null;
+    }
+
+} else {
+
+    $climate_error = 'Climate intelligence engine not found.';
+}
+
 // Fetch latest sensor data including plant name
 $sensor_query = mysqli_query($conn,
     "SELECT sd.*, p.name AS plant_name FROM sensor_data sd
@@ -101,6 +145,200 @@ while ($row = $result->fetch_assoc()) {
         <a class="menu-button" href="profile.php">👤 Profile</a>
         <a class="menu-button" href="gardener_settings.html"> ⚙ Settings</a>
     </div><div class="content">
+        <!-- ===============================
+     BLOOMBOT CLIMATE INTELLIGENCE
+     =============================== -->
+
+<?php if ($climate_intelligence && isset($climate_intelligence['status']) && $climate_intelligence['status'] === 'success'): ?>
+
+<div class="climate-intelligence">
+
+    <div class="intelligence-header">
+        <div>
+            <span class="eyebrow">LIVE CLIMATE INTELLIGENCE</span>
+            <h2>Environmental Conditions</h2>
+            <p>
+                Powered by live JKUAT Conduit observations
+            </p>
+        </div>
+
+        <div class="live-indicator">
+            <span></span> LIVE
+        </div>
+    </div>
+
+    <!-- KPI CARDS -->
+
+    <div class="climate-kpis">
+
+        <div class="climate-card">
+            <div class="climate-icon">🌡️</div>
+            <div>
+                <span class="climate-label">Temperature</span>
+                <strong>
+                    <?= htmlspecialchars($climate_intelligence['current_conditions']['temperature']['value']) ?>°C
+                </strong>
+                <small>
+                    <?= htmlspecialchars($climate_intelligence['current_conditions']['temperature']['status']) ?>
+                </small>
+            </div>
+        </div>
+
+        <div class="climate-card">
+            <div class="climate-icon">💧</div>
+            <div>
+                <span class="climate-label">Humidity</span>
+                <strong>
+                    <?= htmlspecialchars($climate_intelligence['current_conditions']['humidity']['value']) ?>%
+                </strong>
+                <small>
+                    <?= htmlspecialchars($climate_intelligence['current_conditions']['humidity']['status']) ?>
+                </small>
+            </div>
+        </div>
+
+        <div class="climate-card">
+            <div class="climate-icon">💨</div>
+            <div>
+                <span class="climate-label">Airflow</span>
+                <strong>
+                    <?= htmlspecialchars($climate_intelligence['current_conditions']['wind']['value']) ?>
+                    <small>m/s</small>
+                </strong>
+                <small>
+                    <?= htmlspecialchars($climate_intelligence['current_conditions']['wind']['status']) ?>
+                </small>
+            </div>
+        </div>
+
+        <div class="climate-card health-card">
+            <div class="climate-icon">🧠</div>
+            <div>
+                <span class="climate-label">Climate Health</span>
+                <strong>
+                    <?= htmlspecialchars($climate_intelligence['climate_health']['score']) ?>
+                    <small>/100</small>
+                </strong>
+                <small>
+                    <?= htmlspecialchars($climate_intelligence['climate_health']['status']) ?>
+                </small>
+            </div>
+        </div>
+
+    </div>
+
+
+    <!-- RISK + INSIGHT -->
+
+    <div class="intelligence-grid">
+
+        <div class="risk-panel">
+
+            <div class="panel-title">
+                <span>Climate Risk</span>
+
+                <span class="risk-badge">
+                    <?= htmlspecialchars($climate_intelligence['risk']['level']) ?>
+                </span>
+            </div>
+
+            <h3>
+                <?= htmlspecialchars($climate_intelligence['risk']['primary_driver']) ?>
+            </h3>
+
+            <p>
+                <?= htmlspecialchars($climate_intelligence['crop_intelligence']['concern']) ?>
+            </p>
+
+            <div class="recommendation">
+                <strong>Recommended action</strong>
+
+                <p>
+                    <?= htmlspecialchars($climate_intelligence['crop_intelligence']['recommended_action']) ?>
+                </p>
+            </div>
+
+        </div>
+
+
+        <!-- WHAT CHANGED -->
+
+        <div class="change-panel">
+
+            <div class="panel-title">
+                <span>What Changed?</span>
+                <span>↗️</span>
+            </div>
+
+            <?php foreach ($climate_intelligence['what_changed'] as $change): ?>
+
+                <div class="change-item">
+                    <span>•</span>
+                    <p><?= htmlspecialchars($change) ?></p>
+                </div>
+
+            <?php endforeach; ?>
+
+        </div>
+
+    </div>
+
+
+    <!-- IRRIGATION -->
+
+    <div class="irrigation-panel">
+
+        <div>
+            <span class="eyebrow">IRRIGATION INTELLIGENCE</span>
+
+            <h3>
+                <?= htmlspecialchars($climate_intelligence['irrigation']['status']) ?>
+            </h3>
+
+            <p>
+                <?= htmlspecialchars($climate_intelligence['irrigation']['recommendation']) ?>
+            </p>
+        </div>
+
+        <div class="irrigation-icon">
+            💦
+        </div>
+
+    </div>
+
+
+    <!-- EVIDENCE -->
+
+    <div class="evidence-panel">
+
+        <div class="panel-title">
+            <span>Why BloomBot flagged this</span>
+            <span>AI-ready intelligence</span>
+        </div>
+
+        <div class="evidence-grid">
+
+            <?php foreach ($climate_intelligence['intelligence']['evidence'] as $evidence): ?>
+
+                <div class="evidence-item">
+                    <?= htmlspecialchars($evidence) ?>
+                </div>
+
+            <?php endforeach; ?>
+
+        </div>
+
+    </div>
+
+</div>
+
+<?php elseif ($climate_error): ?>
+
+<div class="climate-error">
+    ⚠️ <?= htmlspecialchars($climate_error) ?>
+</div>
+
+<?php endif; ?>
     <?php if ($weather): ?>
         <div class="weather-widget">
            <h3>🌤 Current Weather in Nairobi</h3>
@@ -286,14 +524,14 @@ if (alerts.length > 0) {
     showAlert();
 }
 </script><script>
-function simulateSensorData() {
+/*function simulateSensorData() {
     fetch('simulate_sensor_data.php')
         .then(response => response.json())
         .then(data => console.log("✅ " + data.message))
         .catch(error => console.error("❌ Error simulating sensor data:", error));
 }
 simulateSensorData();
-setInterval(simulateSensorData, 5 * 60 * 1000);
+setInterval(simulateSensorData, 5 * 60 * 1000);*/
 </script>
 </body>
 </html>
