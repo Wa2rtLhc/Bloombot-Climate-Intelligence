@@ -1,27 +1,361 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Bloombot | Sign Up</title>
-  <link rel="stylesheet" href="CSS/style.css?v=7"> <!-- Link your CSS -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>BloomBot | Create Account</title>
+
+    <meta
+        name="description"
+        content="Create your BloomBot Climate Intelligence account."
+    >
+
+    <link rel="stylesheet" href="CSS/style.css?v=8">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet"
+    >
 </head>
-<body>
-  <div class="container">
-    <h2>Create Your Bloombot Account</h2>
-    <form action="signup.php" method="post">
-      <input type="text" name="username" placeholder="Username" required>
-      <input type="email" name="email" placeholder="Email" required>
-      <input type="password" name="password" placeholder="Password" required>
-<input type="text" name="phone_number" placeholder="‪+254712345678‬" required>
-      <select name="role" required>
-        <option value="">Select Role</option>
-        <option value="admin">Admin</option>
-        <option value="gardener">Gardener</option>
-        <option value="guest">Guest</option>
-      </select>
-      <button type="submit">Sign Up</button>
-    </form>
-    <a class="link" href="login.html">Already have an account? Login</a>
-</div>
+
+<body class="auth-page">
+
+    <!-- NAVIGATION -->
+    <header class="topnav auth-nav">
+
+        <a href="index.html" class="brand">
+            <span class="brand-mark">🌿</span>
+            <span>BloomBot</span>
+        </a>
+
+        <div class="topnav-right">
+
+            <span class="auth-nav-text">
+                Already have an account?
+            </span>
+
+            <a href="login.html" class="secondary-button">
+                Login
+            </a>
+
+        </div>
+
+    </header>
+
+
+    <!-- MAIN -->
+    <main class="auth-main">
+
+        <section class="auth-wrapper signup-wrapper">
+
+            <!-- LEFT INTRO -->
+            <div class="auth-intro">
+
+                <span class="eyebrow">
+                    🌿 JOIN BLOOMBOT
+                </span>
+
+                <h1>
+                    Start growing
+                    <br>
+                    <span>with intelligence.</span>
+                </h1>
+
+                <p>
+                    Create your BloomBot account and start turning
+                    environmental data into meaningful climate
+                    intelligence for your plants.
+                </p>
+
+
+                <div class="auth-benefits">
+
+                    <div class="auth-benefit">
+
+                        <span>
+                            🌱
+                        </span>
+
+                        <div>
+
+                            <strong>
+                                Manage your plants
+                            </strong>
+
+                            <small>
+                                Keep your plants, locations, and monitoring
+                                information organized.
+                            </small>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="auth-benefit">
+
+                        <span>
+                            📊
+                        </span>
+
+                        <div>
+
+                            <strong>
+                                Understand your climate
+                            </strong>
+
+                            <small>
+                                Turn environmental measurements into
+                                clear climate insights.
+                            </small>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="auth-benefit">
+
+                        <span>
+                            🔔
+                        </span>
+
+                        <div>
+
+                            <strong>
+                                Stay informed
+                            </strong>
+
+                            <small>
+                                Receive alerts when conditions may require
+                                your attention.
+                            </small>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- SIGN UP CARD -->
+            <div class="auth-card">
+
+                <div class="auth-card-header">
+
+                    <div class="auth-icon">
+                        🌱
+                    </div>
+
+                    <div>
+
+                        <span class="card-eyebrow">
+                            CREATE ACCOUNT
+                        </span>
+
+                        <h2>
+                            Get started
+                        </h2>
+
+                        <p>
+                            Create your BloomBot account below.
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <form
+                    action="signup.php"
+                    method="POST"
+                    class="auth-form"
+                >
+
+                    <!-- USERNAME -->
+                    <div class="form-group">
+
+                        <label for="username">
+                            Username
+                        </label>
+
+                        <input
+                            type="text"
+                            id="username"
+                            name="username"
+                            placeholder="Choose a username"
+                            autocomplete="username"
+                            required
+                        >
+
+                    </div>
+
+
+                    <!-- EMAIL -->
+                    <div class="form-group">
+
+                        <label for="email">
+                            Email address
+                        </label>
+
+                        <input
+                            type="email"
+                            id="email"
+                            name="email"
+                            placeholder="you@example.com"
+                            autocomplete="email"
+                            required
+                        >
+
+                    </div>
+
+
+                    <!-- PASSWORD -->
+                    <div class="form-group">
+
+                        <label for="password">
+                            Password
+                        </label>
+
+                        <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            placeholder="Create a password"
+                            autocomplete="new-password"
+                            required
+                        >
+
+                    </div>
+
+
+                    <!-- PHONE -->
+                    <div class="form-group">
+
+                        <label for="phone_number">
+                            Phone number
+                        </label>
+
+                        <input
+                            type="tel"
+                            id="phone_number"
+                            name="phone_number"
+                            placeholder="+254712345678"
+                            autocomplete="tel"
+                            pattern="^\+?[0-9]{10,15}$"
+                            required
+                        >
+
+                        <small class="field-help">
+                            Include your country code, e.g. +254.
+                        </small>
+
+                    </div>
+
+
+                    <!-- ROLE -->
+                    <div class="form-group">
+
+                        <label for="role">
+                            Account role
+                        </label>
+
+                        <select
+                            id="role"
+                            name="role"
+                            required
+                        >
+
+                            <option value="">
+                                Select your role
+                            </option>
+
+                            <option value="gardener">
+                                Gardener
+                            </option>
+
+                            <option value="guest">
+                                Guest
+                            </option>
+
+                            <option value="admin">
+                                Admin
+                            </option>
+
+                        </select>
+
+                        <small class="field-help">
+                            Choose the role assigned to your account.
+                        </small>
+
+                    </div>
+
+
+                    <!-- SUBMIT -->
+                    <button
+                        type="submit"
+                        class="primary-button auth-submit"
+                    >
+                        Create account
+                        <span>→</span>
+                    </button>
+
+                </form>
+
+
+                <!-- LOGIN -->
+                <div class="auth-register">
+
+                    <span>
+                        Already have a BloomBot account?
+                    </span>
+
+                    <a href="login.html">
+                        Sign in
+                    </a>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <!-- FOOTER -->
+    <footer class="auth-footer">
+
+        <span>
+            © 2026 BloomBot Climate Intelligence
+        </span>
+
+        <span>
+            Climate intelligence for smarter growing.
+        </span>
+
+    </footer>
+
+
+    <script>
+
+        document.addEventListener("DOMContentLoaded", function () {
+
+            const card = document.querySelector(".auth-card");
+
+            if (card) {
+                card.classList.add("auth-card-visible");
+            }
+
+        });
+
+    </script>
+
 </body>
 </html>

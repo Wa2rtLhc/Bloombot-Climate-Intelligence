@@ -28,5 +28,5 @@ session_start();
 $_SESSION['flash'] = 'You have been logged out.';
 
 // 5) Redirect to login page (adjust path if needed)
-header('Location: login.php');
+header('Location: login.html');
 exit;

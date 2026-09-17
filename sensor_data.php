@@ -61,6 +61,7 @@ if ($download) {
 <html>
 <head>
     <title>Gardener Reports</title>
+    <link rel="stylesheet" href="CSS/style.css?v=7">
     <style>
         body {
             font-family: Arial, sans-serif;

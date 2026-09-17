@@ -80,49 +80,9 @@ if (isset($_GET['download']) && count($rows) > 0) {
     <title>Gardener Report</title>
      <link
         rel="stylesheet"
-        href="CSS/style.css?v=7"
+        href="CSS/style.css?v=9"
     >
-    <style>
-    body {
-            font-family: Arial, sans-serif;
-            margin: 40px;
-            background-color: #f9f9f9;
-        }
-        h2 {
-            margin-bottom: 20px;
-        }
-        .btn {
-            text-decoration: none;
-            background-color:rgb(33, 243, 128);
-            color: white;
-            padding: 10px 15px;
-            border-radius: 5px;
-            margin-bottom: 15px;
-            display: inline-block;
-        }
-        .btn:hover {
-            background-color:rgb(25, 210, 118);
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-            background-color: white;
-        }
-        th, td {
-            padding: 12px;
-            border-bottom: 1px solid #ccc;
-            text-align: left;
-        }
-        th {
-            background-color: #4CAF50;
-            color: white;
-        }
-        tr:hover {
-                background-color: #f1f1f1;}
-        
-        
-    </style>
+    
 </head>
 <body>
 <a href="gardener_dashboard .php" class="btn">← Back to Dashboard</a>

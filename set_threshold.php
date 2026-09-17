@@ -81,7 +81,7 @@ $conn->close();
 <head>
     <meta charset="UTF-8">
     <title>Set Plant Thresholds</title>
-    <link rel="stylesheet" href="CSS/style.css">
+    <link rel="stylesheet" href="CSS/style.css?v=8">
     <style>
         body {
             background-image: url('bg.jpg');

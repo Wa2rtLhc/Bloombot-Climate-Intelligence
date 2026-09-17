@@ -438,219 +438,369 @@ if (!empty($plants)) {
     <meta charset="UTF-8">
     <title>Gardener Dashboard - Bloombot</title>
     <meta http-equiv="refresh" content="200">
-    <link rel="stylesheet" href="CSS/style.css?v=7">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="CSS/style.css?v=8">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
 </head>
-<body><div class="topnav">
-    <a href="gardener_dashboard .php">Dashboard</a>
-    <a href="about.html">About</a>
-    <a href="contact.html">Contact Us</a>
-    <a href="profile.php">My Profile</a>
-    <a href="view_plants.php">My Plants</a>
-    <a href="gardener_reports.php">Reports</a>
-    <div class="topnav-right">
-        <a href="logout.php">Logout</a>
+<body><header class="topnav">
+
+    <div class="brand">
+        <span class="brand-mark">🌿</span>
+        <span>BloomBot</span>
     </div>
-</div><div class="header">
-    <h1>Welcome, Gardener!</h1>
-</div><div class="main">
-    <div class="sidebar">
-        <h2>Menu</h2>
-        <a class="menu-button" href="add_plant.php">🌿 Add Plants</a>
-        <a class="menu-button" href="set_threshold.php">⚙ Set Thresholds</a>
-        <a class="menu-button" href="view_alerts.php">🔔 View Alerts</a>
-        <a class="menu-button" href="view_plants.php">🌱 View My Plants</a>
-        <a class="menu-button" href="sensor_data.php">📊 View Sensor Data</a>
-        <a class="menu-button" href="profile.php">👤 Profile</a>
-        <a class="menu-button" href="gardener_settings.html"> ⚙ Settings</a>
-    </div><div class="content">
+
+    <nav class="topnav-links">
+        <a href="gardener_dashboard .php" class="active">Dashboard</a>
+        <a href="about.html">About</a>
+        <a href="contact.html">Contact</a>
+        <a href="profile.php">Profile</a>
+        <a href="gardener_reports.php">Reports</a>
+    </nav>
+
+    <div class="topnav-right">
+        <span class="user-greeting">
+            👋 <?= htmlspecialchars($username) ?>
+        </span>
+
+        <a href="logout.php" class="logout-link">
+            Logout
+        </a>
+    </div>
+
+</header><section class="page-header">
+
+    <div>
+        <span class="eyebrow">BLOOMBOT CLIMATE INTELLIGENCE</span>
+
+        <h1>Welcome back, <?= htmlspecialchars($username) ?>.</h1>
+
+        <p>
+            Monitor your plants, understand the climate, and act before conditions become a problem.
+        </p>
+    </div>
+
+    <div class="header-status">
+        <span class="status-dot"></span>
+        Monitoring active
+    </div>
+
+</section><div class="main">
+    <aside class="sidebar" id="sidebar">
+
+    <div class="sidebar-header">
+
+        <div class="sidebar-title">
+            <span class="sidebar-logo">🌿</span>
+
+            <div>
+                <strong>BloomBot</strong>
+                <small>Gardener</small>
+            </div>
+        </div>
+
+        <button
+            type="button"
+            class="sidebar-toggle"
+            id="sidebarToggle"
+            aria-label="Toggle menu"
+            aria-expanded="true"
+        >
+            ☰
+        </button>
+
+    </div>
+
+
+    <div class="sidebar-section">
+
+        <span class="sidebar-label">MAIN</span>
+
+        <a class="menu-button active" href="gardener_dashboard .php">
+            <span class="menu-icon">⌂</span>
+            <span class="menu-text">Dashboard</span>
+        </a>
+
+        <a class="menu-button" href="view_plants.php">
+            <span class="menu-icon">🌱</span>
+            <span class="menu-text">My Plants</span>
+        </a>
+
+        <a class="menu-button" href="add_plant.php">
+            <span class="menu-icon">＋</span>
+            <span class="menu-text">Add Plant</span>
+        </a>
+
+    </div>
+
+
+    <div class="sidebar-section">
+
+        <span class="sidebar-label">MONITORING</span>
+
+        <a class="menu-button" href="sensor_data.php">
+            <span class="menu-icon">◉</span>
+            <span class="menu-text">Sensor Data</span>
+        </a>
+
+        <a class="menu-button" href="view_alerts.php">
+            <span class="menu-icon">🔔</span>
+            <span class="menu-text">Alerts</span>
+
+            <?php if (!empty($recentAlerts)): ?>
+                <span class="notification-count">
+                    <?= count($recentAlerts) ?>
+                </span>
+            <?php endif; ?>
+
+        </a>
+
+        <a class="menu-button" href="set_threshold.php">
+            <span class="menu-icon">⚙️</span>
+            <span class="menu-text">Thresholds</span>
+        </a>
+
+    </div>
+
+
+    <div class="sidebar-section">
+
+        <span class="sidebar-label">ACCOUNT</span>
+
+        <a class="menu-button" href="profile.php">
+            <span class="menu-icon">👤</span>
+            <span class="menu-text">Profile</span>
+        </a>
+
+        <a class="menu-button" href="gardener_settings.html">
+            <span class="menu-icon">⚙️</span>
+            <span class="menu-text">Settings</span>
+        </a>
+
+        <a class="menu-button logout-menu" href="logout.php">
+            <span class="menu-icon">↪️</span>
+            <span class="menu-text">Logout</span>
+        </a>
+
+    </div>
+
+</aside><div class="content">
         <!-- ===============================
      BLOOMBOT CLIMATE INTELLIGENCE
      =============================== -->
 
 <?php if ($climate_intelligence && isset($climate_intelligence['status']) && $climate_intelligence['status'] === 'success'): ?>
 
-<div class="climate-intelligence">
+<section class="climate-intelligence modern-intelligence">
 
     <div class="intelligence-header">
+
         <div>
-            <span class="eyebrow">LIVE CLIMATE INTELLIGENCE</span>
-            <h2>Environmental Conditions</h2>
-            <p>
-                Powered by live JKUAT Conduit observations
-            </p>
+            <span class="eyebrow">BLOOMBOT INTELLIGENCE</span>
+            <h2>Climate at a glance</h2>
         </div>
 
-        <div class="live-indicator">
-            <span></span> LIVE
-        </div>
-    </div>
-
-    <!-- KPI CARDS -->
-
-    <div class="climate-kpis">
-
-        <div class="climate-card">
-            <div class="climate-icon">🌡️</div>
-            <div>
-                <span class="climate-label">Temperature</span>
-                <strong>
-                    <?= htmlspecialchars($climate_intelligence['current_conditions']['temperature']['value']) ?>°C
-                </strong>
-                <small>
-                    <?= htmlspecialchars($climate_intelligence['current_conditions']['temperature']['status']) ?>
-                </small>
-            </div>
-        </div>
-
-        <div class="climate-card">
-            <div class="climate-icon">💧</div>
-            <div>
-                <span class="climate-label">Humidity</span>
-                <strong>
-                    <?= htmlspecialchars($climate_intelligence['current_conditions']['humidity']['value']) ?>%
-                </strong>
-                <small>
-                    <?= htmlspecialchars($climate_intelligence['current_conditions']['humidity']['status']) ?>
-                </small>
-            </div>
-        </div>
-
-        <div class="climate-card">
-            <div class="climate-icon">💨</div>
-            <div>
-                <span class="climate-label">Airflow</span>
-                <strong>
-                    <?= htmlspecialchars($climate_intelligence['current_conditions']['wind']['value']) ?>
-                    <small>m/s</small>
-                </strong>
-                <small>
-                    <?= htmlspecialchars($climate_intelligence['current_conditions']['wind']['status']) ?>
-                </small>
-            </div>
-        </div>
-
-        <div class="climate-card health-card">
-            <div class="climate-icon">🧠</div>
-            <div>
-                <span class="climate-label">Climate Health</span>
-                <strong>
-                    <?= htmlspecialchars($climate_intelligence['climate_health']['score']) ?>
-                    <small>/100</small>
-                </strong>
-                <small>
-                    <?= htmlspecialchars($climate_intelligence['climate_health']['status']) ?>
-                </small>
-            </div>
+        <div class="intelligence-live">
+            <span class="status-dot"></span>
+            LIVE
         </div>
 
     </div>
 
 
-    <!-- RISK + INSIGHT -->
+    <div class="climate-hero">
 
-    <div class="intelligence-grid">
+        <?php
+        $health_score = (int)($climate_intelligence['climate_health']['score'] ?? 0);
+        ?>
 
-        <div class="risk-panel">
+        <div
+            class="climate-score-ring"
+            style="--score: <?= $health_score ?>;"
+        >
 
-            <div class="panel-title">
-                <span>Climate Risk</span>
+            <div class="score-content">
 
-                <span class="risk-badge">
-                    <?= htmlspecialchars($climate_intelligence['risk']['level']) ?>
-                </span>
+                <strong>
+                    <?= $health_score ?>
+                </strong>
+
+                <span>/100</span>
+
             </div>
+
+        </div>
+
+
+        <div class="climate-summary">
+
+            <span class="card-eyebrow">
+                CLIMATE HEALTH
+            </span>
 
             <h3>
-                <?= htmlspecialchars($climate_intelligence['risk']['primary_driver']) ?>
+                <?= htmlspecialchars(
+                    $climate_intelligence['climate_health']['status']
+                    ?? 'Unknown'
+                ) ?>
             </h3>
 
             <p>
-                <?= htmlspecialchars($climate_intelligence['crop_intelligence']['concern']) ?>
+                <?= htmlspecialchars(
+                    $climate_intelligence['risk']['primary_driver']
+                    ?? 'Conditions are being monitored'
+                ) ?>
             </p>
-
-            <div class="recommendation">
-                <strong>Recommended action</strong>
-
-                <p>
-                    <?= htmlspecialchars($climate_intelligence['crop_intelligence']['recommended_action']) ?>
-                </p>
-            </div>
-
-        </div>
-
-
-        <!-- WHAT CHANGED -->
-
-        <div class="change-panel">
-
-            <div class="panel-title">
-                <span>What Changed?</span>
-                <span>↗️</span>
-            </div>
-
-            <?php foreach ($climate_intelligence['what_changed'] as $change): ?>
-
-                <div class="change-item">
-                    <span>•</span>
-                    <p><?= htmlspecialchars($change) ?></p>
-                </div>
-
-            <?php endforeach; ?>
 
         </div>
 
     </div>
 
 
-    <!-- IRRIGATION -->
+    <div class="modern-climate-metrics">
 
-    <div class="irrigation-panel">
+        <div class="modern-metric">
+
+            <div class="metric-icon">🌡️</div>
+
+            <div>
+
+                <span>Temperature</span>
+
+                <strong>
+                    <?= htmlspecialchars(
+                        $climate_intelligence['current_conditions']['temperature']['value']
+                        ?? '--'
+                    ) ?>°C
+                </strong>
+
+                <small>
+                    <?= htmlspecialchars(
+                        $climate_intelligence['current_conditions']['temperature']['status']
+                        ?? ''
+                    ) ?>
+                </small>
+
+            </div>
+
+        </div>
+
+
+        <div class="modern-metric">
+
+            <div class="metric-icon">💧</div>
+
+            <div>
+
+                <span>Humidity</span>
+
+                <strong>
+                    <?= htmlspecialchars(
+                        $climate_intelligence['current_conditions']['humidity']['value']
+                        ?? '--'
+                    ) ?>%
+                </strong>
+
+                <small>
+                    <?= htmlspecialchars(
+                        $climate_intelligence['current_conditions']['humidity']['status']
+                        ?? ''
+                    ) ?>
+                </small>
+
+            </div>
+
+        </div>
+
+
+        <div class="modern-metric">
+
+            <div class="metric-icon">💨</div>
+
+            <div>
+
+                <span>Airflow</span>
+
+                <strong>
+                    <?= htmlspecialchars(
+                        $climate_intelligence['current_conditions']['wind']['value']
+                        ?? '--'
+                    ) ?>
+                    m/s
+                </strong>
+
+                <small>
+                    <?= htmlspecialchars(
+                        $climate_intelligence['current_conditions']['wind']['status']
+                        ?? ''
+                    ) ?>
+                </small>
+
+            </div>
+
+        </div>
+
+
+        <div class="modern-metric risk-metric">
+
+            <div class="metric-icon">⚠️</div>
+
+            <div>
+
+                <span>Risk</span>
+
+                <strong>
+                    <?= htmlspecialchars(
+                        $climate_intelligence['risk']['level']
+                        ?? 'Unknown'
+                    ) ?>
+                </strong>
+
+                <small>
+                    <?= htmlspecialchars(
+                        $climate_intelligence['risk']['score']
+                        ?? '--'
+                    ) ?>
+                    score
+                </small>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="climate-quick-insight">
+
+        <span class="insight-icon">💡</span>
 
         <div>
-            <span class="eyebrow">IRRIGATION INTELLIGENCE</span>
 
-            <h3>
-                <?= htmlspecialchars($climate_intelligence['irrigation']['status']) ?>
-            </h3>
+            <span class="card-eyebrow">
+                PRIMARY DRIVER
+            </span>
 
-            <p>
-                <?= htmlspecialchars($climate_intelligence['irrigation']['recommendation']) ?>
-            </p>
+            <strong>
+                <?= htmlspecialchars(
+                    $climate_intelligence['risk']['primary_driver']
+                    ?? 'No major driver detected'
+                ) ?>
+            </strong>
+
         </div>
 
-        <div class="irrigation-icon">
-            💦
-        </div>
-
-    </div>
-
-
-    <!-- EVIDENCE -->
-
-    <div class="evidence-panel">
-
-        <div class="panel-title">
-            <span>Why BloomBot flagged this</span>
-            <span>AI-ready intelligence</span>
-        </div>
-
-        <div class="evidence-grid">
-
-            <?php foreach ($climate_intelligence['intelligence']['evidence'] as $evidence): ?>
-
-                <div class="evidence-item">
-                    <?= htmlspecialchars($evidence) ?>
-                </div>
-
-            <?php endforeach; ?>
-
+        <div class="insight-arrow">
+            →
         </div>
 
     </div>
 
-</div>
+</section>
+
 
 <?php elseif ($climate_error): ?>
 
@@ -710,7 +860,7 @@ if (!empty($plants)) {
      * Only show the latest 10 observations.
      */
     $recent_climate_observations =
-        array_slice($climate_observations, 0, 10);
+        array_slice($climate_observations, 0, 5);
 
     ?>
 
@@ -786,12 +936,31 @@ if (!empty($plants)) {
         <canvas id="sensorChart" width="100%" height="40"></canvas>
     </div>
 
-   <h2>Your Plants & BloomBot Assessments</h2>
+  <section class="plants-section">
 
-<?php if (!empty($plants)): ?>
+    <div class="section-heading">
 
-    <?php foreach ($plants as $plant): ?>
+        <div>
+            <span class="eyebrow">YOUR GARDEN</span>
 
+            <h2>Your Plants</h2>
+
+            <p>
+                BloomBot's live assessment of your monitored plants.
+            </p>
+        </div>
+
+        <a href="add_plant.php" class="primary-button">
+            + Add Plant
+        </a>
+
+    </div>
+
+    <?php if (!empty($plants)): ?>
+
+    <div class="plant-grid">
+
+        <?php foreach ($plants as $plant): ?>
         <?php
 
         $plant_id =
@@ -1181,7 +1350,7 @@ if (
 }
 ?>
 
-<div class="plant-intelligence-card">
+<article class="plant-card">
 
     <div class="plant-card-header">
 
@@ -1241,31 +1410,6 @@ if (
 
         <div class="plant-data-item">
 
-            <span>💧 Humidity</span>
-
-            <strong>
-
-                <?php if ($humidity_value !== null): ?>
-
-                    <?= htmlspecialchars($humidity_value) ?>%
-
-                <?php else: ?>
-
-                    —
-
-                <?php endif; ?>
-
-            </strong>
-
-            <small>
-                Live environment
-            </small>
-
-        </div>
-
-
-        <div class="plant-data-item">
-
             <span>💨 Airflow</span>
 
             <strong>
@@ -1306,33 +1450,45 @@ if (
     </div>
 
 
-    <div class="plant-assessment">
+    <div class="assessment-grid">
+
+    <div class="assessment-card assessment-main">
+
+        <div class="assessment-icon">
+            🧠
+        </div>
 
         <div>
+            <span class="card-eyebrow">BLOOMBOT ASSESSMENT</span>
 
-            <strong>
-                BloomBot Assessment
-            </strong>
+            <h4>Current assessment</h4>
 
             <p>
                 <?= htmlspecialchars($assessment_message) ?>
             </p>
-
         </div>
 
-        <div class="plant-action">
+    </div>
 
-            <strong>
-                Recommended action
-            </strong>
+    <div class="assessment-card action-card">
+
+        <div class="assessment-icon">
+            💡
+        </div>
+
+        <div>
+            <span class="card-eyebrow">RECOMMENDED ACTION</span>
+
+            <h4>What to do</h4>
 
             <p>
                 <?= htmlspecialchars($recommended_action) ?>
             </p>
-
         </div>
 
     </div>
+
+</div>
 
 
     <?php if ($plant_threshold): ?>
@@ -1363,7 +1519,7 @@ if (
 
     <?php endif; ?>
 
-</div>
+    </article>
 
 <?php
 
@@ -1494,14 +1650,29 @@ if (alerts.length > 0) {
     showAlert();
 }
 </script><script>
-/*function simulateSensorData() {
-    fetch('simulate_sensor_data.php')
-        .then(response => response.json())
-        .then(data => console.log("✅ " + data.message))
-        .catch(error => console.error("❌ Error simulating sensor data:", error));
-}
-simulateSensorData();
-setInterval(simulateSensorData, 5 * 60 * 1000);*/
+document.addEventListener("DOMContentLoaded", function () {
+
+    const sidebarToggle = document.getElementById("sidebarToggle");
+
+    if (sidebarToggle) {
+
+        sidebarToggle.addEventListener("click", function () {
+
+            document.body.classList.toggle("sidebar-collapsed");
+
+            const isCollapsed =
+                document.body.classList.contains("sidebar-collapsed");
+
+            sidebarToggle.setAttribute(
+                "aria-expanded",
+                isCollapsed ? "false" : "true"
+            );
+
+        });
+
+    }
+
+});
 </script>
 </body>
 </html>

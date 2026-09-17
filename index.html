@@ -1,31 +1,1186 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Welcome to Bloombot</title>
-  <link rel="stylesheet" href="CSS/style.css?v=7" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>BloomBot | Climate Intelligence for Smarter Growing</title>
+
+    <meta
+        name="description"
+        content="BloomBot transforms live environmental data into climate intelligence, plant assessments, and actionable recommendations for smarter growing."
+    >
+
+    <!-- Existing BloomBot stylesheet -->
+    <link rel="stylesheet" href="CSS/style.css?v=9">
+
+    <!-- Fonts already used by BloomBot -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet"
+    >
 </head>
-<body>
 
-  <!-- Main Welcome Section -->
-  <div class="container">
-    <h2>Welcome to Bloombot 🌱</h2>
-    <p style="text-align:center; font-size: 18px;">
-      Your smart gardening assistant. Monitor your plants, automate watering, and grow with confidence!
-    </p>
+<body class="landing-page">
 
-    <button onclick="location.href='login.html'">Login</button>
-    <button onclick="location.href='signup.html'">Sign Up</button>
-    <button onclick="location.href='guest_view.php'">Continue as Guest</button>
+    <!-- =========================
+         TOP NAVIGATION
+    ========================== -->
 
-    <a class="link" href="about.html">Learn more about Bloombot</a>
-  </div>
+    <header class="topnav landing-nav">
 
-  <!-- Footer -->
-  <div class="footer">
-    &copy; 2025 Bloombot. Grow Smart. Live Green.
-  </div>
+        <a href="index.html" class="brand">
+            <span class="brand-mark">🌿</span>
+            <span>BloomBot</span>
+        </a>
+
+        <nav class="topnav-links">
+
+            <a href="#home" class="active">
+                Home
+            </a>
+
+            <a href="#intelligence">
+                Intelligence
+            </a>
+
+            <a href="#how-it-works">
+                How it works
+            </a>
+
+            <a href="#features">
+                Features
+            </a>
+
+            <a href="#about">
+                About
+            </a>
+
+        </nav>
+
+        <div class="topnav-right">
+
+            <a href="login.html" class="secondary-button">
+                Login
+            </a>
+
+            <a href="signup.html" class="primary-button">
+                Get started
+            </a>
+
+        </div>
+
+    </header>
+
+
+    <!-- =========================
+         HERO
+    ========================== -->
+
+    <main>
+
+        <section class="hero-section landing-hero" id="home">
+
+            <div class="hero-content">
+
+                <span class="eyebrow">
+                    🌿 CLIMATE INTELLIGENCE FOR SMARTER GROWING
+                </span>
+
+                <h1>
+                    Grow smarter.
+                    <br>
+
+                    <span>
+                        Respond before climate becomes a problem.
+                    </span>
+                </h1>
+
+                <p>
+                    BloomBot transforms live environmental data into
+                    meaningful climate intelligence, plant assessments,
+                    and actionable recommendations — helping growers
+                    understand changing conditions before they become
+                    a problem.
+                </p>
+
+                <div class="hero-actions">
+
+                    <a href="signup.html" class="primary-button">
+                        Start monitoring
+                        <span>→</span>
+                    </a>
+
+                    <a href="#how-it-works" class="secondary-button">
+                        Explore BloomBot
+                    </a>
+
+                </div>
+
+                <div class="hero-trust">
+
+                    <span>
+                        <span class="status-dot"></span>
+                        Live environmental monitoring
+                    </span>
+
+                    <span>
+                        AI-ready intelligence
+                    </span>
+
+                    <span>
+                        Plant-aware recommendations
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <!-- HERO INTELLIGENCE CARD -->
+
+            <div class="hero-status-card landing-intelligence-card">
+
+                <div class="status-card-top">
+
+                    <span>
+                        <span class="status-dot"></span>
+                        Monitoring active
+                    </span>
+
+                    <span class="live-badge">
+                        LIVE
+                    </span>
+
+                </div>
+
+                <div class="hero-score">
+
+                    <div>
+
+                        <span>
+                            Climate Health
+                        </span>
+
+                        <small>
+                            Current assessment
+                        </small>
+
+                    </div>
+
+                    <strong>
+                        82
+                    </strong>
+
+                </div>
+
+                <div class="score-progress">
+
+                    <span style="width: 82%;"></span>
+
+                </div>
+
+                <div class="hero-condition">
+
+                    <span class="condition-icon">
+                        ☁️
+                    </span>
+
+                    <div>
+
+                        <strong>
+                            Conditions are being monitored
+                        </strong>
+
+                        <p>
+                            BloomBot continuously interprets
+                            environmental changes around your plants.
+                        </p>
+
+                    </div>
+
+                </div>
+
+                <div class="hero-mini-grid">
+
+                    <div>
+                        <span>Temperature</span>
+                        <strong>21.4°C</strong>
+                    </div>
+
+                    <div>
+                        <span>Humidity</span>
+                        <strong>67%</strong>
+                    </div>
+
+                    <div>
+                        <span>Airflow</span>
+                        <strong>0.8 m/s</strong>
+                    </div>
+
+                    <div>
+                        <span>Risk</span>
+                        <strong>Low</strong>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =========================
+             VALUE STRIP
+        ========================== -->
+
+        <section class="landing-value-strip">
+
+            <div class="value-item">
+
+                <span class="value-icon">
+                    ◉
+                </span>
+
+                <div>
+                    <strong>
+                        Live data
+                    </strong>
+
+                    <p>
+                        Monitor changing environmental conditions.
+                    </p>
+                </div>
+
+            </div>
+
+
+            <div class="value-item">
+
+                <span class="value-icon">
+                    🧠
+                </span>
+
+                <div>
+                    <strong>
+                        Climate intelligence
+                    </strong>
+
+                    <p>
+                        Turn raw measurements into useful insights.
+                    </p>
+                </div>
+
+            </div>
+
+
+            <div class="value-item">
+
+                <span class="value-icon">
+                    🌱
+                </span>
+
+                <div>
+                    <strong>
+                        Plant-aware
+                    </strong>
+
+                    <p>
+                        Interpret conditions in the context of your plants.
+                    </p>
+                </div>
+
+            </div>
+
+
+            <div class="value-item">
+
+                <span class="value-icon">
+                    🔔
+                </span>
+
+                <div>
+                    <strong>
+                        Early alerts
+                    </strong>
+
+                    <p>
+                        Know when conditions require attention.
+                    </p>
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =========================
+             INTELLIGENCE SECTION
+        ========================== -->
+
+        <section class="landing-section" id="intelligence">
+
+            <div class="section-heading landing-heading">
+
+                <span class="eyebrow">
+                    BLOOMBOT INTELLIGENCE
+                </span>
+
+                <h2>
+                    From environmental data
+                    <span>to decisions.</span>
+                </h2>
+
+                <p>
+                    BloomBot does more than display sensor readings.
+                    It interprets environmental conditions and turns
+                    them into information a grower can act on.
+                </p>
+
+            </div>
+
+
+            <div class="intelligence-feature-grid">
+
+                <article class="feature-card large-feature-card">
+
+                    <div class="feature-icon">
+                        🧠
+                    </div>
+
+                    <span class="card-eyebrow">
+                        CLIMATE HEALTH
+                    </span>
+
+                    <h3>
+                        Understand the condition of your growing environment.
+                    </h3>
+
+                    <p>
+                        BloomBot combines temperature, humidity, airflow,
+                        heat conditions, trends, and persistence to create
+                        a clear picture of current climate health.
+                    </p>
+
+                    <div class="feature-metric">
+
+                        <span>
+                            Climate Health
+                        </span>
+
+                        <strong>
+                            82
+                        </strong>
+
+                        <small>
+                            / 100
+                        </small>
+
+                    </div>
+
+                </article>
+
+
+                <article class="feature-card">
+
+                    <div class="feature-icon">
+                        ⚠️
+                    </div>
+
+                    <span class="card-eyebrow">
+                        RISK DETECTION
+                    </span>
+
+                    <h3>
+                        See problems before they become serious.
+                    </h3>
+
+                    <p>
+                        Identify conditions such as excessive humidity,
+                        low airflow, heat stress, and other climate risks.
+                    </p>
+
+                    <div class="feature-status">
+                        <span class="status-dot"></span>
+                        Risk monitoring active
+                    </div>
+
+                </article>
+
+
+                <article class="feature-card">
+
+                    <div class="feature-icon">
+                        💡
+                    </div>
+
+                    <span class="card-eyebrow">
+                        RECOMMENDATIONS
+                    </span>
+
+                    <h3>
+                        Know what to do next.
+                    </h3>
+
+                    <p>
+                        Instead of leaving growers with raw numbers,
+                        BloomBot translates climate conditions into
+                        practical recommendations.
+                    </p>
+
+                    <div class="recommendation-preview">
+                        <span>💡</span>
+                        <p>
+                            Monitor foliage and maintain airflow where possible.
+                        </p>
+                    </div>
+
+                </article>
+
+            </div>
+
+        </section>
+
+
+        <!-- =========================
+             HOW IT WORKS
+        ========================== -->
+
+        <section class="landing-section workflow-section" id="how-it-works">
+
+            <div class="section-heading landing-heading centered">
+
+                <span class="eyebrow">
+                    HOW BLOOMBOT WORKS
+                </span>
+
+                <h2>
+                    Data becomes
+                    <span>actionable intelligence.</span>
+                </h2>
+
+                <p>
+                    BloomBot connects environmental monitoring,
+                    climate analysis, plant context, and notifications
+                    into one workflow.
+                </p>
+
+            </div>
+
+
+            <div class="workflow-grid">
+
+                <article class="workflow-card">
+
+                    <span class="workflow-number">
+                        01
+                    </span>
+
+                    <div class="workflow-icon">
+                        📡
+                    </div>
+
+                    <h3>
+                        Collect
+                    </h3>
+
+                    <p>
+                        BloomBot receives environmental observations
+                        from connected monitoring sources.
+                    </p>
+
+                </article>
+
+
+                <div class="workflow-arrow">
+                    →
+                </div>
+
+
+                <article class="workflow-card">
+
+                    <span class="workflow-number">
+                        02
+                    </span>
+
+                    <div class="workflow-icon">
+                        ⚙️
+                    </div>
+
+                    <h3>
+                        Analyze
+                    </h3>
+
+                    <p>
+                        The Climate Intelligence Engine evaluates
+                        current conditions, trends, persistence, and risk.
+                    </p>
+
+                </article>
+
+
+                <div class="workflow-arrow">
+                    →
+                </div>
+
+
+                <article class="workflow-card">
+
+                    <span class="workflow-number">
+                        03
+                    </span>
+
+                    <div class="workflow-icon">
+                        🌱
+                    </div>
+
+                    <h3>
+                        Interpret
+                    </h3>
+
+                    <p>
+                        Environmental conditions are interpreted
+                        alongside the plant and its monitoring location.
+                    </p>
+
+                </article>
+
+
+                <div class="workflow-arrow">
+                    →
+                </div>
+
+
+                <article class="workflow-card">
+
+                    <span class="workflow-number">
+                        04
+                    </span>
+
+                    <div class="workflow-icon">
+                        🔔
+                    </div>
+
+                    <h3>
+                        Act
+                    </h3>
+
+                    <p>
+                        Growers receive assessments, recommendations,
+                        and alerts when attention is needed.
+                    </p>
+
+                </article>
+
+            </div>
+
+        </section>
+
+
+        <!-- =========================
+             FEATURES
+        ========================== -->
+
+        <section class="landing-section" id="features">
+
+            <div class="section-heading landing-heading">
+
+                <span class="eyebrow">
+                    BUILT FOR SMARTER GROWING
+                </span>
+
+                <h2>
+                    Everything you need
+                    <span>in one place.</span>
+                </h2>
+
+                <p>
+                    BloomBot brings monitoring, intelligence,
+                    plant management, and alerts together in one
+                    professional workspace.
+                </p>
+
+            </div>
+
+
+            <div class="feature-list-grid">
+
+                <article class="feature-list-card">
+
+                    <div class="feature-icon">
+                        🌡️
+                    </div>
+
+                    <div>
+                        <h3>
+                            Live climate monitoring
+                        </h3>
+
+                        <p>
+                            Track temperature, humidity, airflow,
+                            rainfall and other environmental conditions.
+                        </p>
+                    </div>
+
+                </article>
+
+
+                <article class="feature-list-card">
+
+                    <div class="feature-icon">
+                        📈
+                    </div>
+
+                    <div>
+                        <h3>
+                            Climate trends
+                        </h3>
+
+                        <p>
+                            Understand how environmental conditions
+                            are changing instead of viewing isolated readings.
+                        </p>
+                    </div>
+
+                </article>
+
+
+                <article class="feature-list-card">
+
+                    <div class="feature-icon">
+                        📍
+                    </div>
+
+                    <div>
+                        <h3>
+                            Location-aware monitoring
+                        </h3>
+
+                        <p>
+                            Connect plants with their monitoring location
+                            and understand the confidence of environmental data.
+                        </p>
+                    </div>
+
+                </article>
+
+
+                <article class="feature-list-card">
+
+                    <div class="feature-icon">
+                        💧
+                    </div>
+
+                    <div>
+                        <h3>
+                            Irrigation intelligence
+                        </h3>
+
+                        <p>
+                            Use climate conditions as supporting evidence
+                            when deciding whether irrigation needs attention.
+                        </p>
+                    </div>
+
+                </article>
+
+
+                <article class="feature-list-card">
+
+                    <div class="feature-icon">
+                        🔔
+                    </div>
+
+                    <div>
+                        <h3>
+                            Smart notifications
+                        </h3>
+
+                        <p>
+                            Receive alerts when important climate or
+                            plant-related conditions require attention.
+                        </p>
+                    </div>
+
+                </article>
+
+
+                <article class="feature-list-card">
+
+                    <div class="feature-icon">
+                        🤖
+                    </div>
+
+                    <div>
+                        <h3>
+                            AI-ready architecture
+                        </h3>
+
+                        <p>
+                            Build on climate intelligence with machine
+                            learning predictions as more historical data becomes available.
+                        </p>
+                    </div>
+
+                </article>
+
+            </div>
+
+        </section>
+
+
+        <!-- =========================
+             DASHBOARD PREVIEW
+        ========================== -->
+
+        <section class="landing-preview-section">
+
+            <div class="preview-content">
+
+                <span class="eyebrow">
+                    A CLEARER WAY TO MONITOR
+                </span>
+
+                <h2>
+                    Your growing environment,
+                    <span>at a glance.</span>
+                </h2>
+
+                <p>
+                    Instead of searching through disconnected sensor
+                    readings, BloomBot organizes climate conditions,
+                    risks, trends, plant information, and recommended
+                    actions into one clear dashboard.
+                </p>
+
+                <a href="signup.html" class="primary-button">
+                    Explore BloomBot
+                    <span>→</span>
+                </a>
+
+            </div>
+
+
+            <div class="dashboard-preview">
+
+                <div class="preview-topbar">
+
+                    <div>
+                        <span class="preview-dot"></span>
+                        BloomBot Climate Intelligence
+                    </div>
+
+                    <span>
+                        LIVE
+                    </span>
+
+                </div>
+
+
+                <div class="preview-kpis">
+
+                    <div class="preview-kpi">
+
+                        <span>
+                            Temperature
+                        </span>
+
+                        <strong>
+                            21.4°C
+                        </strong>
+
+                        <small>
+                            Favorable
+                        </small>
+
+                    </div>
+
+
+                    <div class="preview-kpi">
+
+                        <span>
+                            Humidity
+                        </span>
+
+                        <strong>
+                            67%
+                        </strong>
+
+                        <small>
+                            Normal
+                        </small>
+
+                    </div>
+
+
+                    <div class="preview-kpi">
+
+                        <span>
+                            Airflow
+                        </span>
+
+                        <strong>
+                            0.8 m/s
+                        </strong>
+
+                        <small>
+                            Stable
+                        </small>
+
+                    </div>
+
+
+                    <div class="preview-kpi health">
+
+                        <span>
+                            Climate Health
+                        </span>
+
+                        <strong>
+                            82
+                        </strong>
+
+                        <small>
+                            Healthy
+                        </small>
+
+                    </div>
+
+                </div>
+
+
+                <div class="preview-panels">
+
+                    <div class="preview-panel">
+
+                        <span class="card-eyebrow">
+                            PRIMARY DRIVER
+                        </span>
+
+                        <h3>
+                            Humidity + Airflow
+                        </h3>
+
+                        <p>
+                            Environmental conditions are being
+                            monitored continuously.
+                        </p>
+
+                    </div>
+
+
+                    <div class="preview-panel">
+
+                        <span class="card-eyebrow">
+                            WHAT CHANGED?
+                        </span>
+
+                        <ul>
+
+                            <li>
+                                Temperature trending upward
+                            </li>
+
+                            <li>
+                                Humidity remains stable
+                            </li>
+
+                            <li>
+                                Airflow requires monitoring
+                            </li>
+
+                        </ul>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =========================
+             ABOUT
+        ========================== -->
+
+        <section class="landing-section about-section" id="about">
+
+            <div class="about-grid">
+
+                <div>
+
+                    <span class="eyebrow">
+                        ABOUT BLOOMBOT
+                    </span>
+
+                    <h2>
+                        Agriculture needs more than
+                        <span>raw data.</span>
+                    </h2>
+
+                </div>
+
+
+                <div>
+
+                    <p>
+                        Environmental sensors can generate large
+                        amounts of information, but measurements alone
+                        do not tell a grower what those conditions mean.
+                    </p>
+
+                    <p>
+                        BloomBot is designed to bridge that gap by
+                        transforming environmental observations into
+                        understandable climate intelligence.
+                    </p>
+
+                    <p>
+                        The platform combines live monitoring,
+                        transparent climate analysis, plant context,
+                        location awareness, notifications, and
+                        machine-learning readiness.
+                    </p>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =========================
+             FINAL CTA
+        ========================== -->
+
+        <section class="landing-cta">
+
+            <div class="cta-content">
+
+                <span class="eyebrow">
+                    🌿 READY TO GROW SMARTER?
+                </span>
+
+                <h2>
+                    Understand your climate.
+                    <br>
+                    <span>Protect your plants.</span>
+                </h2>
+
+                <p>
+                    Start monitoring your growing environment
+                    with BloomBot Climate Intelligence.
+                </p>
+
+                <div class="hero-actions">
+
+                    <a href="signup.html" class="primary-button">
+                        Get started
+                        <span>→</span>
+                    </a>
+
+                    <a href="login.html" class="secondary-button">
+                        Login to BloomBot
+                    </a>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <!-- =========================
+         FOOTER
+    ========================== -->
+
+    <footer class="landing-footer">
+
+        <div class="footer-brand">
+
+            <a href="index.html" class="brand">
+
+                <span class="brand-mark">
+                    🌿
+                </span>
+
+                <span>
+                    BloomBot
+                </span>
+
+            </a>
+
+            <p>
+                Climate intelligence for smarter growing.
+            </p>
+
+        </div>
+
+
+        <div class="footer-links">
+
+            <div>
+
+                <strong>
+                    Platform
+                </strong>
+
+                <a href="#intelligence">
+                    Intelligence
+                </a>
+
+                <a href="#features">
+                    Features
+                </a>
+
+                <a href="#how-it-works">
+                    How it works
+                </a>
+
+            </div>
+
+
+            <div>
+
+                <strong>
+                    Account
+                </strong>
+
+                <a href="login.php">
+                    Login
+                </a>
+
+                <a href="register.php">
+                    Register
+                </a>
+
+            </div>
+
+
+            <div>
+
+                <strong>
+                    BloomBot
+                </strong>
+
+                <a href="about.html">
+                    About
+                </a>
+
+                <a href="contact.html">
+                    Contact
+                </a>
+
+            </div>
+
+        </div>
+
+    </footer>
+
+
+    <div class="footer-bottom">
+
+        <span>
+            © 2026 BloomBot Climate Intelligence
+        </span>
+
+        <span>
+            Built for smarter, data-driven agriculture.
+        </span>
+
+    </div>
+
+
+    <!-- =========================
+         SMALL INTERACTION SCRIPT
+    ========================== -->
+
+    <script>
+
+        document.addEventListener("DOMContentLoaded", function () {
+
+            /*
+             * Smooth navigation
+             */
+
+            document.querySelectorAll('a[href^="#"]').forEach(function (link) {
+
+                link.addEventListener("click", function (event) {
+
+                    const targetId = this.getAttribute("href");
+
+                    if (targetId === "#") {
+                        return;
+                    }
+
+                    const target = document.querySelector(targetId);
+
+                    if (target) {
+
+                        event.preventDefault();
+
+                        target.scrollIntoView({
+                            behavior: "smooth",
+                            block: "start"
+                        });
+
+                    }
+
+                });
+
+            });
+
+
+            /*
+             * Reveal sections as the user scrolls
+             */
+
+            const revealElements = document.querySelectorAll(
+                ".feature-card, " +
+                ".feature-list-card, " +
+                ".workflow-card, " +
+                ".value-item, " +
+                ".landing-preview-section, " +
+                ".about-grid"
+            );
+
+            const observer = new IntersectionObserver(
+                function (entries) {
+
+                    entries.forEach(function (entry) {
+
+                        if (entry.isIntersecting) {
+
+                            entry.target.classList.add("is-visible");
+
+                            observer.unobserve(entry.target);
+
+                        }
+
+                    });
+
+                },
+                {
+                    threshold: 0.12
+                }
+            );
+
+
+            revealElements.forEach(function (element) {
+
+                observer.observe(element);
+
+            });
+
+        });
+
+    </script>
 
 </body>
 </html>
