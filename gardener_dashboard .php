@@ -2,7 +2,10 @@
 include 'weather_api.php';
 session_start();
 include('db_connect.php');
+require_once __DIR__ . '/notification_engine.php';
 
+$climate_intelligence = null;
+$climate_error = null;
 // Timeout duration in seconds (e.g., 15 minutes)
 $inactive = 900; 
 
@@ -36,108 +39,6 @@ $user_id = $_SESSION['user_id'];
 $username = $_SESSION['username'];
 
 $weather = null;
-// ===============================
-// BLOOMBOT CLIMATE INTELLIGENCE
-// ===============================
-
-$climate_intelligence = null;
-$climate_error = null;
-
-$intelligence_file = __DIR__ . '/climate_intelligence.php';
-
-if (file_exists($intelligence_file)) {
-
-    try {
-
-        /*
-         * climate_intelligence.php outputs JSON directly.
-         * We therefore execute it through a local HTTP request
-         * instead of including it directly in this page.
-         */
-
-        $protocol = (
-            isset($_SERVER['HTTPS']) &&
-            $_SERVER['HTTPS'] !== 'off'
-        ) ? 'https' : 'http';
-
-        $host = $_SERVER['HTTP_HOST'];
-
-        $intelligence_url =
-            $protocol .
-            '://' .
-            $host .
-            dirname($_SERVER['SCRIPT_NAME']) .
-            '/climate_intelligence.php';
-
-
-        $ch = curl_init($intelligence_url);
-
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-
-        $intelligence_output =
-            curl_exec($ch);
-
-        $http_code =
-            curl_getinfo(
-                $ch,
-                CURLINFO_HTTP_CODE
-            );
-
-        $curl_error =
-            curl_error($ch);
-
-        curl_close($ch);
-
-
-        if ($intelligence_output === false) {
-
-            $climate_error =
-                'Unable to connect to the climate intelligence engine.';
-
-        } elseif ($http_code !== 200) {
-
-            $climate_error =
-                'Climate intelligence returned HTTP ' .
-                $http_code .
-                '.';
-
-        } else {
-
-            $climate_intelligence =
-                json_decode(
-                    trim($intelligence_output),
-                    true
-                );
-
-
-            if (
-                !is_array($climate_intelligence) ||
-                ($climate_intelligence['status'] ?? '') !== 'success'
-            ) {
-
-                $climate_error =
-                    'Climate intelligence returned an invalid response.';
-
-                $climate_intelligence = null;
-            }
-        }
-
-    } catch (Throwable $e) {
-
-        $climate_intelligence = null;
-
-        $climate_error =
-            'Climate intelligence is temporarily unavailable.';
-    }
-
-} else {
-
-    $climate_error =
-        'Climate intelligence engine not found.';
-}
-
 // Fetch latest sensor data including plant name
 $sensor_query = mysqli_query($conn,
     "SELECT sd.*, p.name AS plant_name FROM sensor_data sd
@@ -457,6 +358,111 @@ if (mysqli_num_rows($plant_query) > 0):
         $plant_name = $plant['name'];
         $plant_type = $plant['type'];
         $plant_location = $plant['location'];
+        $plant_latitude = $plant['latitude'] ?? null;
+$plant_longitude = $plant['longitude'] ?? null;
+$plant_monitoring_mode = $plant['monitoring_mode'] ?? 'environmental_station';
+
+$climate_intelligence = null;
+$climate_error = null;
+
+if (
+    is_numeric($plant_latitude) &&
+    is_numeric($plant_longitude)
+) {
+
+    $intelligence_file = __DIR__ . '/climate_intelligence.php';
+
+    if (file_exists($intelligence_file)) {
+
+        try {
+
+            $protocol = (
+                isset($_SERVER['HTTPS']) &&
+                $_SERVER['HTTPS'] !== 'off'
+            ) ? 'https' : 'http';
+
+            $host = $_SERVER['HTTP_HOST'];
+
+            $intelligence_url =
+                $protocol .
+                '://' .
+                $host .
+                dirname($_SERVER['SCRIPT_NAME']) .
+                '/climate_intelligence.php?' .
+                http_build_query([
+                    'latitude' => $plant_latitude,
+                    'longitude' => $plant_longitude,
+                    'monitoring_mode' => $plant_monitoring_mode
+                ]);
+
+            $ch = curl_init($intelligence_url);
+
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+            $intelligence_output = curl_exec($ch);
+
+            $http_code = curl_getinfo(
+                $ch,
+                CURLINFO_HTTP_CODE
+            );
+
+            $curl_error = curl_error($ch);
+
+            curl_close($ch);
+
+            if ($intelligence_output === false) {
+
+                $climate_error =
+                    'Unable to connect to the climate intelligence engine.';
+
+            } elseif ($http_code !== 200) {
+
+                $climate_error =
+                    'Climate intelligence returned HTTP ' .
+                    $http_code . '.';
+
+            } else {
+
+                $climate_intelligence =
+                    json_decode(
+                        trim($intelligence_output),
+                        true
+                    );
+
+                if (
+                    !is_array($climate_intelligence) ||
+                    ($climate_intelligence['status'] ?? '') !== 'success'
+                ) {
+
+                    $climate_error =
+                        $climate_intelligence['message']
+                        ?? 'Climate intelligence returned an invalid response.';
+
+                    $climate_intelligence = null;
+                }
+            }
+
+        } catch (Throwable $e) {
+
+            $climate_intelligence = null;
+
+            $climate_error =
+                'Climate intelligence is temporarily unavailable.';
+        }
+
+    } else {
+
+        $climate_error =
+            'Climate intelligence engine not found.';
+    }
+
+} else {
+
+    $climate_error =
+        'Plant location is not configured.';
+}
 
         /*
         |--------------------------------------------------------------------------
@@ -788,7 +794,29 @@ if (mysqli_num_rows($plant_query) > 0):
                 }
             }
         }
+/*
+|--------------------------------------------------------------------------
+| CREATE GARDENER NOTIFICATION
+|--------------------------------------------------------------------------
+*/
 
+if (
+    is_array($climate_intelligence) &&
+    ($climate_intelligence['status'] ?? '') === 'success'
+) {
+
+    $notification_result = generateClimateNotifications(
+        $conn,
+        $climate_intelligence,
+        $plant_id,
+        $plant_name,
+        $plant_status,
+        $assessment_message,
+        $recommended_action,
+        null,
+        $sensor ? true : false
+    );
+}
 ?>
 
 <div class="plant-intelligence-card">

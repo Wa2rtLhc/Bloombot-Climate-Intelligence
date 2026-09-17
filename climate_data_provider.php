@@ -4,439 +4,1194 @@ header('Content-Type: application/json');
 
 require_once 'db_connect.php';
 
+
+// ============================================================
+// HELPER: ERROR RESPONSE
+// ============================================================
+
 function responseError($message, $extra = [])
 {
-    echo json_encode(array_merge([
-        'status' => 'error',
-        'message' => $message
-    ], $extra));
+    echo json_encode(
+        array_merge([
+            'status' => 'error',
+            'message' => $message
+        ], $extra),
+        JSON_PRETTY_PRINT |
+        JSON_UNESCAPED_UNICODE
+    );
+
     exit;
 }
 
+
+// ============================================================
+// HELPER: NUMERIC VALUE
+// ============================================================
+
 function numericValue($value)
 {
-    return is_numeric($value) ? (float)$value : null;
+    return is_numeric($value)
+        ? (float)$value
+        : null;
 }
+
+
+// ============================================================
+// HELPER: INTERNAL LOCAL REQUEST
+// ============================================================
+
+function localRequest($url)
+{
+    $ch = curl_init($url);
+
+    curl_setopt_array($ch, [
+
+        CURLOPT_RETURNTRANSFER => true,
+
+        CURLOPT_FOLLOWLOCATION => true,
+
+        CURLOPT_CONNECTTIMEOUT => 10,
+
+        CURLOPT_TIMEOUT => 30,
+
+        CURLOPT_HTTPHEADER => [
+            'Accept: application/json'
+        ]
+
+    ]);
+
+    $result = curl_exec($ch);
+
+    $httpCode = curl_getinfo(
+        $ch,
+        CURLINFO_HTTP_CODE
+    );
+
+    $curlError = curl_error($ch);
+
+    curl_close($ch);
+
+
+    if ($result === false) {
+
+        return [
+            'success' => false,
+            'http_code' => $httpCode,
+            'curl_error' => $curlError,
+            'response' => null
+        ];
+
+    }
+
+
+    return [
+        'success' => true,
+        'http_code' => $httpCode,
+        'curl_error' => null,
+        'response' => $result
+    ];
+}
+
+
+// ============================================================
+// CONDUIT REQUEST
+// ============================================================
 
 function conduitRequest($fromDate, $toDate)
 {
     $envFile = __DIR__ . '/.env';
 
+
     if (!file_exists($envFile)) {
-        responseError('.env file not found');
+
+        responseError(
+            '.env file not found'
+        );
+
     }
+
 
     $env = [];
 
-    foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+
+    foreach (
+        file(
+            $envFile,
+            FILE_IGNORE_NEW_LINES |
+            FILE_SKIP_EMPTY_LINES
+        )
+        as $line
+    ) {
+
         $line = trim($line);
 
-        if ($line === '' || str_starts_with($line, '#')) {
+
+        if (
+            $line === '' ||
+            str_starts_with($line, '#')
+        ) {
+
             continue;
+
         }
 
-        if (strpos($line, '=') !== false) {
-            [$key, $value] = explode('=', $line, 2);
-            $env[trim($key)] = trim($value);
+
+        if (
+            strpos($line, '=') !== false
+        ) {
+
+            [
+                $key,
+                $value
+            ] = explode(
+                '=',
+                $line,
+                2
+            );
+
+
+            $env[
+                trim($key)
+            ] = trim($value);
+
         }
+
     }
 
-    $apiKey = $env['CONDUIT_API_KEY'] ?? '';
-    $email  = $env['CONDUIT_EMAIL'] ?? '';
 
-    if (!$apiKey || !$email) {
-        responseError('Conduit credentials missing from .env');
+    $apiKey =
+        $env['CONDUIT_API_KEY']
+        ?? '';
+
+
+    $email =
+        $env['CONDUIT_EMAIL']
+        ?? '';
+
+
+    if (
+        !$apiKey ||
+        !$email
+    ) {
+
+        responseError(
+            'Conduit credentials missing from .env'
+        );
+
     }
 
-    $url = 'https://conduit.jhubafrica.com/data.php';
+
+    $url =
+        'https://conduit.jhubafrica.com/data.php';
+
 
     $postData = [
-        'apikey'   => $apiKey,
-        'email'    => $email,
-        'fromdate' => $fromDate,
-        'todate'   => $toDate
+
+        'apikey' =>
+            $apiKey,
+
+        'email' =>
+            $email,
+
+        'fromdate' =>
+            $fromDate,
+
+        'todate' =>
+            $toDate
+
     ];
 
-    $ch = curl_init($url);
 
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => http_build_query($postData),
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_HTTPHEADER => [
-            'Content-Type: application/x-www-form-urlencoded'
+    $ch =
+        curl_init($url);
+
+
+    curl_setopt_array(
+        $ch,
+        [
+
+            CURLOPT_POST =>
+                true,
+
+            CURLOPT_POSTFIELDS =>
+                http_build_query(
+                    $postData
+                ),
+
+            CURLOPT_RETURNTRANSFER =>
+                true,
+
+            CURLOPT_TIMEOUT =>
+                30,
+
+            CURLOPT_SSL_VERIFYPEER =>
+                true,
+
+            CURLOPT_HTTPHEADER =>
+                [
+
+                    'Content-Type: application/x-www-form-urlencoded',
+
+                    'Accept: application/json'
+
+                ]
+
         ]
-    ]);
+    );
 
-    $result = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlError = curl_error($ch);
+
+    $result =
+        curl_exec($ch);
+
+
+    $httpCode =
+        curl_getinfo(
+            $ch,
+            CURLINFO_HTTP_CODE
+        );
+
+
+    $curlError =
+        curl_error($ch);
+
 
     curl_close($ch);
 
+
     if ($result === false) {
-        responseError('Conduit request failed', [
-            'curl_error' => $curlError
-        ]);
+
+        responseError(
+            'Conduit request failed',
+            [
+
+                'curl_error' =>
+                    $curlError
+
+            ]
+        );
+
     }
+
 
     if ($httpCode !== 200) {
-        responseError('Conduit returned HTTP error', [
-            'http_code' => $httpCode
-        ]);
+
+        responseError(
+            'Conduit returned HTTP error',
+            [
+
+                'http_code' =>
+                    $httpCode,
+
+                'response_preview' =>
+                    substr(
+                        $result,
+                        0,
+                        500
+                    )
+
+            ]
+        );
+
     }
 
-    $json = json_decode($result, true);
+
+    $json =
+        json_decode(
+            $result,
+            true
+        );
+
 
     if (!is_array($json)) {
-        responseError('Invalid JSON returned by Conduit');
+
+        responseError(
+            'Invalid JSON returned by Conduit',
+            [
+
+                'json_error' =>
+                    json_last_error_msg(),
+
+                'response_preview' =>
+                    substr(
+                        $result,
+                        0,
+                        500
+                    )
+
+            ]
+        );
+
     }
+
 
     return $json;
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| GET LOCATION
-|--------------------------------------------------------------------------
-*/
+// ============================================================
+// 1. GET LOCATION
+// ============================================================
 
-$latitude = isset($_GET['latitude']) ? (float)$_GET['latitude'] : null;
-$longitude = isset($_GET['longitude']) ? (float)$_GET['longitude'] : null;
-$monitoringMode = $_GET['monitoring_mode'] ?? 'environmental_station';
+$latitude =
+    isset($_GET['latitude'])
+        ? (float)$_GET['latitude']
+        : null;
 
-if ($latitude === null || $longitude === null) {
-    responseError('Latitude and longitude are required');
+
+$longitude =
+    isset($_GET['longitude'])
+        ? (float)$_GET['longitude']
+        : null;
+
+
+$monitoringMode =
+    $_GET['monitoring_mode']
+    ?? 'environmental_station';
+
+
+// ============================================================
+// 2. VALIDATE LOCATION
+// ============================================================
+
+if (
+    $latitude === null ||
+    $longitude === null
+) {
+
+    responseError(
+        'Latitude and longitude are required'
+    );
+
 }
 
-if ($latitude < -90 || $latitude > 90 ||
-    $longitude < -180 || $longitude > 180) {
-    responseError('Invalid coordinates');
+
+if (
+    $latitude < -90 ||
+    $latitude > 90 ||
+    $longitude < -180 ||
+    $longitude > 180
+) {
+
+    responseError(
+        'Invalid coordinates'
+    );
+
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| ASK SOURCE MANAGER
-|--------------------------------------------------------------------------
-*/
+// ============================================================
+// 3. ASK SOURCE MANAGER
+// ============================================================
 
 $managerUrl =
     'http://localhost/Bloombot/climate_source_manager.php' .
-    '?latitude=' . urlencode($latitude) .
-    '&longitude=' . urlencode($longitude) .
-    '&monitoring_mode=' . urlencode($monitoringMode);
+    '?latitude=' .
+    urlencode($latitude) .
+    '&longitude=' .
+    urlencode($longitude) .
+    '&monitoring_mode=' .
+    urlencode($monitoringMode);
 
-$managerResponse = @file_get_contents($managerUrl);
 
-if ($managerResponse === false) {
-    responseError('Could not contact climate source manager');
+$managerResult =
+    localRequest($managerUrl);
+
+
+if (!$managerResult['success']) {
+
+    responseError(
+        'Could not contact climate source manager',
+        [
+
+            'curl_error' =>
+                $managerResult['curl_error']
+
+        ]
+    );
+
 }
 
-$sourceInfo = json_decode($managerResponse, true);
 
-if (!is_array($sourceInfo) || ($sourceInfo['status'] ?? '') !== 'success') {
-    responseError('Invalid response from climate source manager');
+if (
+    $managerResult['http_code'] < 200 ||
+    $managerResult['http_code'] >= 300
+) {
+
+    responseError(
+        'Climate source manager returned HTTP error',
+        [
+
+            'http_code' =>
+                $managerResult['http_code']
+
+        ]
+    );
+
 }
 
-$source = $sourceInfo['source'] ?? null;
+
+$sourceInfo =
+    json_decode(
+        $managerResult['response'],
+        true
+    );
+
+
+if (
+    !is_array($sourceInfo) ||
+    ($sourceInfo['status'] ?? '') !== 'success'
+) {
+
+    responseError(
+        'Invalid response from climate source manager',
+        [
+
+            'source_manager_response' =>
+                $sourceInfo
+
+        ]
+    );
+
+}
+
+
+$source =
+    $sourceInfo['source']
+    ?? null;
+
 
 if (!$source) {
-    responseError('No climate data source selected');
+
+    responseError(
+        'No climate data source selected'
+    );
+
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| PLANT SENSOR
-|--------------------------------------------------------------------------
-*/
+// ============================================================
+// 4. PLANT SENSOR
+// ============================================================
 
-if (($source['type'] ?? '') === 'plant_sensor') {
+if (
+    ($source['type'] ?? '') ===
+    'plant_sensor'
+) {
 
-    echo json_encode([
-        'status' => 'success',
+    echo json_encode(
+        [
 
-        'source' => $source,
+            'status' =>
+                'success',
 
-        'location' => [
-            'latitude' => $latitude,
-            'longitude' => $longitude
+            'source' =>
+                $source,
+
+            'location' =>
+                [
+
+                    'latitude' =>
+                        $latitude,
+
+                    'longitude' =>
+                        $longitude
+
+                ],
+
+            'data' =>
+                null,
+
+            'observations' =>
+                [],
+
+            'forecast' =>
+                [],
+
+            'data_quality' =>
+                [
+
+                    'source_type' =>
+                        'Plant Sensor',
+
+                    'direct_sensor_measurement' =>
+                        true,
+
+                    'note' =>
+                        'Direct plant-level sensor integration is reserved for sensor-connected deployments.'
+
+                ]
+
         ],
-
-        'data' => null,
-
-        'data_quality' => [
-            'source_type' => 'Plant Sensor',
-            'direct_sensor_measurement' => true,
-            'note' => 'Direct plant-level sensor integration is reserved for sensor-connected deployments.'
-        ]
-    ], JSON_PRETTY_PRINT);
+        JSON_PRETTY_PRINT |
+        JSON_UNESCAPED_UNICODE
+    );
 
     exit;
+
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| OPEN-METEO
-|--------------------------------------------------------------------------
-*/
+// ============================================================
+// 5. OPEN-METEO LOCATION WEATHER
+// ============================================================
 
-if (($source['type'] ?? '') === 'location_weather') {
+if (
+    ($source['type'] ?? '') ===
+    'location_weather'
+) {
 
     $weatherUrl =
         'http://localhost/Bloombot/open_meteo.php' .
-        '?latitude=' . urlencode($latitude) .
-        '&longitude=' . urlencode($longitude);
+        '?latitude=' .
+        urlencode($latitude) .
+        '&longitude=' .
+        urlencode($longitude);
 
-    $weatherResponse = @file_get_contents($weatherUrl);
 
-    if ($weatherResponse === false) {
-        responseError('Could not contact Open-Meteo provider');
+    $weatherResult =
+        localRequest($weatherUrl);
+
+
+    // --------------------------------------------------------
+    // CONNECTION ERROR
+    // --------------------------------------------------------
+
+    if (!$weatherResult['success']) {
+
+        responseError(
+            'Could not contact Open-Meteo provider',
+            [
+
+                'provider_url' =>
+                    $weatherUrl,
+
+                'curl_error' =>
+                    $weatherResult['curl_error']
+
+            ]
+        );
+
     }
 
-    $weather = json_decode($weatherResponse, true);
 
-    if (!is_array($weather) || ($weather['status'] ?? '') !== 'success') {
-        responseError('Invalid Open-Meteo response');
+    // --------------------------------------------------------
+    // HTTP ERROR
+    // --------------------------------------------------------
+
+    if (
+        $weatherResult['http_code'] < 200 ||
+        $weatherResult['http_code'] >= 300
+    ) {
+
+        responseError(
+            'Open-Meteo provider returned HTTP error',
+            [
+
+                'http_code' =>
+                    $weatherResult['http_code'],
+
+                'response_preview' =>
+                    substr(
+                        $weatherResult['response'],
+                        0,
+                        1000
+                    )
+
+            ]
+        );
+
     }
 
-    $current = $weather['current_conditions'] ?? [];
 
-    echo json_encode([
-        'status' => 'success',
+    // --------------------------------------------------------
+    // DECODE JSON
+    // --------------------------------------------------------
 
-        'source' => $source,
+    $weather =
+        json_decode(
+            $weatherResult['response'],
+            true
+        );
 
-        'location' => $weather['location'] ?? [
-            'latitude' => $latitude,
-            'longitude' => $longitude
+
+    if (!is_array($weather)) {
+
+        responseError(
+            'Open-Meteo returned invalid JSON',
+            [
+
+                'json_error' =>
+                    json_last_error_msg(),
+
+                'response_preview' =>
+                    substr(
+                        $weatherResult['response'],
+                        0,
+                        1000
+                    )
+
+            ]
+        );
+
+    }
+
+
+    // --------------------------------------------------------
+    // PROVIDER STATUS
+    // --------------------------------------------------------
+
+    if (
+        ($weather['status'] ?? '') !==
+        'success'
+    ) {
+
+        responseError(
+            'Open-Meteo provider returned an unsuccessful response',
+            [
+
+                'provider_response' =>
+                    $weather
+
+            ]
+        );
+
+    }
+
+
+    // --------------------------------------------------------
+    // CURRENT CONDITIONS
+    // --------------------------------------------------------
+
+    $current =
+        $weather['current_conditions']
+        ?? [];
+
+
+    if (empty($current)) {
+
+        responseError(
+            'Open-Meteo returned no current conditions',
+            [
+
+                'provider_response' =>
+                    $weather
+
+            ]
+        );
+
+    }
+
+
+    // --------------------------------------------------------
+    // NORMALIZED RESPONSE
+    // --------------------------------------------------------
+
+    echo json_encode(
+        [
+
+            'status' =>
+                'success',
+
+            'source' =>
+                $source,
+
+            'location' =>
+                $weather['location']
+                ?? [
+
+                    'latitude' =>
+                        $latitude,
+
+                    'longitude' =>
+                        $longitude
+
+                ],
+
+
+            'data' =>
+                [
+
+                    'timestamp' =>
+                        $current['time']
+                        ?? null,
+
+
+                    'temperature' =>
+                        numericValue(
+                            $current['temperature']
+                            ?? null
+                        ),
+
+
+                    'humidity' =>
+                        numericValue(
+                            $current['humidity']
+                            ?? null
+                        ),
+
+
+                    'apparent_temperature' =>
+                        numericValue(
+                            $current['apparent_temperature']
+                            ?? null
+                        ),
+
+
+                    'wind_speed' =>
+                        numericValue(
+                            $current['wind_speed']
+                            ?? null
+                        ),
+
+
+                    'wind_direction' =>
+                        numericValue(
+                            $current['wind_direction']
+                            ?? null
+                        ),
+
+
+                    'wind_gusts' =>
+                        numericValue(
+                            $current['wind_gusts']
+                            ?? null
+                        ),
+
+
+                    'precipitation' =>
+                        numericValue(
+                            $current['precipitation']
+                            ?? null
+                        ),
+
+
+                    'rain' =>
+                        numericValue(
+                            $current['rain']
+                            ?? null
+                        ),
+
+
+                    'rain_probability' =>
+                        numericValue(
+                            $current['precipitation_probability']
+                            ?? null
+                        ),
+
+
+                    'et0' =>
+                        numericValue(
+                            $current['et0']
+                            ?? null
+                        ),
+
+
+                    'vpd' =>
+                        numericValue(
+                            $current['vpd']
+                            ?? null
+                        ),
+
+
+                    'soil_temperature' =>
+                        numericValue(
+                            $current['soil_temperature']
+                            ?? null
+                        ),
+
+
+                    'soil_moisture' =>
+                        numericValue(
+                            $current['soil_moisture']
+                            ?? null
+                        ),
+
+
+                    'heat_index' =>
+                        null,
+
+
+                    'wet_bulb' =>
+                        null,
+
+
+                    'wet_bulb_globe' =>
+                        null,
+
+
+                    'solar_radiation' =>
+                        numericValue(
+                            $current['solar_radiation']
+                            ?? null
+                        )
+
+                ],
+
+
+            'observations' =>
+                $weather['observations']
+                ?? [],
+
+
+            'forecast' =>
+                $weather['forecast']
+                ?? [],
+
+
+            'data_quality' =>
+                [
+
+                    'source_type' =>
+                        'Location-based weather model',
+
+                    'direct_sensor_measurement' =>
+                        false,
+
+                    'note' =>
+                        'Values represent modelled weather conditions for the requested coordinates.'
+
+                ]
+
         ],
-
-        'data' => [
-            'timestamp' => $current['time'] ?? null,
-
-            'temperature' => numericValue($current['temperature'] ?? null),
-
-            'humidity' => numericValue($current['humidity'] ?? null),
-
-            'apparent_temperature' =>
-                numericValue($current['apparent_temperature'] ?? null),
-
-            'wind_speed' =>
-                numericValue($current['wind_speed'] ?? null),
-
-            'wind_direction' =>
-                numericValue($current['wind_direction'] ?? null),
-
-            'wind_gusts' =>
-                numericValue($current['wind_gusts'] ?? null),
-
-            'precipitation' =>
-                numericValue($current['precipitation'] ?? null),
-
-            'rain' =>
-                numericValue($current['rain'] ?? null),
-
-            'rain_probability' =>
-                numericValue($current['precipitation_probability'] ?? null),
-
-            'et0' =>
-                numericValue($current['et0'] ?? null),
-
-            'vpd' =>
-                numericValue($current['vpd'] ?? null),
-
-            'soil_temperature' =>
-                numericValue($current['soil_temperature'] ?? null),
-
-            'soil_moisture' =>
-                numericValue($current['soil_moisture'] ?? null),
-
-            'heat_index' => null,
-
-            'wet_bulb' => null,
-
-            'wet_bulb_globe' => null,
-
-            'solar_radiation' =>
-                numericValue($current['solar_radiation'] ?? null)
-        ],
-
-        'observations' => $weather['observations'] ?? [],
-
-        'forecast' => $weather['forecast'] ?? [],
-
-        'data_quality' => [
-            'source_type' => 'Location-based weather model',
-            'direct_sensor_measurement' => false,
-            'note' => 'Values represent modelled weather conditions for the requested coordinates.'
-        ]
-    ], JSON_PRETTY_PRINT);
+        JSON_PRETTY_PRINT |
+        JSON_UNESCAPED_UNICODE
+    );
 
     exit;
+
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| JKUAT CONDUIT
-|--------------------------------------------------------------------------
-*/
+// ============================================================
+// 6. JKUAT CONDUIT ENVIRONMENTAL STATION
+// ============================================================
 
-if (($source['type'] ?? '') === 'environmental_station') {
+if (
+    ($source['type'] ?? '') ===
+    'environmental_station'
+) {
 
-    $toDate = date('Y-m-d');
-    $fromDate = date('Y-m-d', strtotime('-1 day'));
+    $toDate =
+        date('Y-m-d');
 
-    $conduit = conduitRequest($fromDate, $toDate);
 
-    /*
-     * Conduit normally returns observations in a data array.
-     */
+    $fromDate =
+        date(
+            'Y-m-d',
+            strtotime('-1 day')
+        );
+
+
+    $conduit =
+        conduitRequest(
+            $fromDate,
+            $toDate
+        );
+
+
+    // --------------------------------------------------------
+    // EXTRACT RAW OBSERVATIONS
+    // --------------------------------------------------------
+
     $rawObservations = [];
 
-    if (isset($conduit['data']) && is_array($conduit['data'])) {
-        $rawObservations = $conduit['data'];
-    } elseif (array_is_list($conduit)) {
-        $rawObservations = $conduit;
+
+    if (
+        isset($conduit['data']) &&
+        is_array($conduit['data'])
+    ) {
+
+        $rawObservations =
+            $conduit['data'];
+
+    } elseif (
+        array_is_list($conduit)
+    ) {
+
+        $rawObservations =
+            $conduit;
+
     }
 
-    if (count($rawObservations) === 0) {
-        responseError('No observations returned by Conduit');
+
+    if (
+        count($rawObservations) === 0
+    ) {
+
+        responseError(
+            'No observations returned by Conduit'
+        );
+
     }
+
+
+    // --------------------------------------------------------
+    // NORMALIZE OBSERVATIONS
+    // --------------------------------------------------------
 
     $observations = [];
 
-    foreach ($rawObservations as $row) {
+
+    foreach (
+        $rawObservations
+        as $row
+    ) {
 
         if (!is_array($row)) {
             continue;
         }
 
-        $observations[] = [
-            'timestamp' =>
-                $row['ts'] ?? null,
 
-            'temperature' =>
-                numericValue($row['temp_sht'] ?? null),
+        $observations[] =
+            [
 
-            'humidity' =>
-                numericValue($row['humidity_sht'] ?? null),
+                'timestamp' =>
+                    $row['ts']
+                    ?? null,
 
-            'wind_speed' =>
-                numericValue($row['wind_spd'] ?? null),
 
-            'wind_direction' =>
-                numericValue($row['wind_dir'] ?? null),
+                'temperature' =>
+                    numericValue(
+                        $row['temp_sht']
+                        ?? null
+                    ),
 
-            'wind_gusts' =>
-                numericValue($row['wind_gust'] ?? null),
 
-            'heat_index' =>
-                numericValue($row['heat_idx'] ?? null),
+                'humidity' =>
+                    numericValue(
+                        $row['humidity_sht']
+                        ?? null
+                    ),
 
-            'wet_bulb' =>
-                numericValue($row['wet_bulb_temp'] ?? null),
 
-            'wet_bulb_globe' =>
-                numericValue($row['wet_bulb_globe_temp'] ?? null),
+                'wind_speed' =>
+                    numericValue(
+                        $row['wind_spd']
+                        ?? null
+                    ),
 
-            'solar_visible' =>
-                numericValue($row['si1145_vis'] ?? null),
 
-            'solar_infrared' =>
-                numericValue($row['si1145_ir'] ?? null),
+                'wind_direction' =>
+                    numericValue(
+                        $row['wind_dir']
+                        ?? null
+                    ),
 
-            'uv' =>
-                numericValue($row['si1145_uv'] ?? null),
 
-            'pressure' =>
-                numericValue($row['press_bmx'] ?? null),
+                'wind_gusts' =>
+                    numericValue(
+                        $row['wind_gust']
+                        ?? null
+                    ),
 
-            /*
-             * Rainfall fields intentionally remain separate.
-             * Their units still need validation.
-             */
-            'rainfall_rg1' =>
-                numericValue($row['rg1'] ?? null),
 
-            'rainfall_rg2' =>
-                numericValue($row['rg2'] ?? null),
+                'heat_index' =>
+                    numericValue(
+                        $row['heat_idx']
+                        ?? null
+                    ),
 
-            'rainfall_units_validated' => false,
 
-            'precipitation' => null,
+                'wet_bulb' =>
+                    numericValue(
+                        $row['wet_bulb_temp']
+                        ?? null
+                    ),
 
-            'et0' => null,
 
-            'vpd' => null,
+                'wet_bulb_globe' =>
+                    numericValue(
+                        $row['wet_bulb_globe_temp']
+                        ?? null
+                    ),
 
-            'soil_temperature' => null,
 
-            'soil_moisture' => null
-        ];
+                'solar_visible' =>
+                    numericValue(
+                        $row['si1145_vis']
+                        ?? null
+                    ),
+
+
+                'solar_infrared' =>
+                    numericValue(
+                        $row['si1145_ir']
+                        ?? null
+                    ),
+
+
+                'uv' =>
+                    numericValue(
+                        $row['si1145_uv']
+                        ?? null
+                    ),
+
+
+                'pressure' =>
+                    numericValue(
+                        $row['press_bmx']
+                        ?? null
+                    ),
+
+
+                'rainfall_rg1' =>
+                    numericValue(
+                        $row['rg1']
+                        ?? null
+                    ),
+
+
+                'rainfall_rg2' =>
+                    numericValue(
+                        $row['rg2']
+                        ?? null
+                    ),
+
+
+                'rainfall_units_validated' =>
+                    false,
+
+
+                'precipitation' =>
+                    null,
+
+
+                'et0' =>
+                    null,
+
+
+                'vpd' =>
+                    null,
+
+
+                'soil_temperature' =>
+                    null,
+
+
+                'soil_moisture' =>
+                    null
+
+            ];
+
     }
 
 
-    /*
-     * Most recent observation
-     */
-    $current = null;
+    // --------------------------------------------------------
+    // FIND MOST RECENT OBSERVATION
+    // --------------------------------------------------------
 
-    foreach ($observations as $observation) {
+    $current =
+        null;
+
+
+    foreach (
+        $observations
+        as $observation
+    ) {
 
         if (
             $current === null ||
             (
-                isset($observation['timestamp']) &&
-                isset($current['timestamp']) &&
-                strtotime($observation['timestamp']) >
-                strtotime($current['timestamp'])
+                isset(
+                    $observation['timestamp']
+                ) &&
+                isset(
+                    $current['timestamp']
+                ) &&
+                strtotime(
+                    $observation['timestamp']
+                ) >
+                strtotime(
+                    $current['timestamp']
+                )
             )
         ) {
-            $current = $observation;
+
+            $current =
+                $observation;
+
         }
+
     }
 
 
-    echo json_encode([
-        'status' => 'success',
+    // --------------------------------------------------------
+    // RESPONSE
+    // --------------------------------------------------------
 
-        'source' => $source,
+    echo json_encode(
+        [
 
-        'location' => [
-            'latitude' => $latitude,
-            'longitude' => $longitude
+            'status' =>
+                'success',
+
+
+            'source' =>
+                $source,
+
+
+            'location' =>
+                [
+
+                    'latitude' =>
+                        $latitude,
+
+                    'longitude' =>
+                        $longitude
+
+                ],
+
+
+            'data' =>
+                $current,
+
+
+            'observations' =>
+                $observations,
+
+
+            'forecast' =>
+                [],
+
+
+            'data_quality' =>
+                [
+
+                    'source_type' =>
+                        'Environmental station',
+
+                    'direct_sensor_measurement' =>
+                        true,
+
+                    'observation_count' =>
+                        count(
+                            $observations
+                        ),
+
+                    'rainfall_units_validated' =>
+                        false,
+
+                    'note' =>
+                        'Environmental observations are supplied by JKUAT Conduit. Rainfall field units remain unvalidated.'
+
+                ]
+
         ],
-
-        'data' => $current,
-
-        'observations' => $observations,
-
-        'forecast' => [],
-
-        'data_quality' => [
-            'source_type' => 'Environmental station',
-            'direct_sensor_measurement' => true,
-            'observation_count' => count($observations),
-            'rainfall_units_validated' => false,
-            'note' => 'Environmental observations are supplied by JKUAT Conduit. Rainfall field units remain unvalidated.'
-        ]
-    ], JSON_PRETTY_PRINT);
+        JSON_PRETTY_PRINT |
+        JSON_UNESCAPED_UNICODE
+    );
 
     exit;
+
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| UNKNOWN SOURCE
-|--------------------------------------------------------------------------
-*/
+// ============================================================
+// 7. UNKNOWN SOURCE
+// ============================================================
 
-responseError('Unsupported climate source type');
+responseError(
+    'Unsupported climate source type'
+);
+
+?>

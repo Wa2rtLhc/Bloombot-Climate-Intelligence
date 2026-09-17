@@ -3,15 +3,24 @@
 /**
  * ============================================================
  * BLOOMBOT CLIMATE INTELLIGENCE ENGINE
- * VERSION 3.0
+ * VERSION 3.1 - LOCATION AWARE
  * ============================================================
  *
- * Live data source:
- * JKUAT Conduit
+ * Data pipeline:
  *
- * Pipeline:
- *
- * Live observations
+ * Plant location
+ *       ↓
+ * Climate Data Provider
+ *       ↓
+ * Climate Source Manager
+ *       ↓
+ * ┌───────────────────────────────┐
+ * │ Plant Sensor                  │
+ * │ Nearby Environmental Station  │
+ * │ Location-based Weather Model  │
+ * └───────────────────────────────┘
+ *       ↓
+ * Normalized observations
  *       ↓
  * Climate analysis
  *       ↓
@@ -23,9 +32,11 @@
  *       ↓
  * Actionable recommendations
  *
- * NOTE:
- * Rain-gauge fields are intentionally NOT interpreted as
- * millimetres until their Conduit units are verified.
+ * IMPORTANT:
+ * This engine does NOT call JKUAT Conduit directly anymore.
+ *
+ * The climate_data_provider.php file decides which source
+ * should be used based on the plant's location.
  */
 
 
@@ -33,141 +44,49 @@ header('Content-Type: application/json');
 
 
 // ============================================================
-// 1. LOAD ENVIRONMENT
+// 1. INPUT
 // ============================================================
 
-$envFile = __DIR__ . '/.env';
+$latitude = isset($_GET['latitude'])
+    ? (float) $_GET['latitude']
+    : null;
 
-if (!file_exists($envFile)) {
+$longitude = isset($_GET['longitude'])
+    ? (float) $_GET['longitude']
+    : null;
 
-    echo json_encode([
-        "status" => "error",
-        "message" => ".env file not found"
-    ], JSON_PRETTY_PRINT);
-
-    exit;
-}
-
-$env = parse_ini_file($envFile);
-
-$apiKey = $env['CONDUIT_API_KEY'] ?? '';
-$email  = $env['CONDUIT_EMAIL'] ?? '';
-
-if (empty($apiKey) || empty($email)) {
-
-    echo json_encode([
-        "status" => "error",
-        "message" => "Conduit API credentials are missing"
-    ], JSON_PRETTY_PRINT);
-
-    exit;
-}
+$monitoringMode =
+    $_GET['monitoring_mode']
+    ?? 'environmental_station';
 
 
-// ============================================================
-// 2. DATE RANGE
-// ============================================================
+// ------------------------------------------------------------
+// VALIDATE LOCATION
+// ------------------------------------------------------------
 
-$today = date('Y-m-d');
-
-$yesterday = date(
-    'Y-m-d',
-    strtotime('-1 day')
-);
-
-
-// ============================================================
-// 3. REQUEST CONDUIT DATA
-// ============================================================
-
-$url = "https://conduit.jhubafrica.com/data.php";
-
-$postData = [
-
-    'apikey'   => $apiKey,
-
-    'email'    => $email,
-
-    'fromdate' => $yesterday,
-
-    'todate'   => $today
-];
-
-
-$ch = curl_init($url);
-
-curl_setopt_array($ch, [
-
-    CURLOPT_RETURNTRANSFER => true,
-
-    CURLOPT_POST => true,
-
-    CURLOPT_POSTFIELDS =>
-        http_build_query($postData),
-
-    CURLOPT_TIMEOUT => 30,
-
-    CURLOPT_HTTPHEADER => [
-
-        'Content-Type: application/x-www-form-urlencoded'
-
-    ]
-
-]);
-
-
-$response = curl_exec($ch);
-
-
-if ($response === false) {
+if ($latitude === null || $longitude === null) {
 
     echo json_encode([
 
         "status" => "error",
 
         "message" =>
-            "Unable to connect to Conduit",
-
-        "error" =>
-            curl_error($ch)
+            "Latitude and longitude are required."
 
     ], JSON_PRETTY_PRINT);
-
-    curl_close($ch);
 
     exit;
 }
 
 
-$httpCode = curl_getinfo(
-    $ch,
-    CURLINFO_HTTP_CODE
-);
-
-curl_close($ch);
-
-
-// ============================================================
-// 4. DECODE RESPONSE
-// ============================================================
-
-$data = json_decode(
-    $response,
-    true
-);
-
-
-if ($httpCode !== 200 || !is_array($data)) {
+if ($latitude < -90 || $latitude > 90) {
 
     echo json_encode([
 
         "status" => "error",
 
         "message" =>
-            "Invalid Conduit response",
-
-        "http_code" =>
-            $httpCode
+            "Invalid latitude."
 
     ], JSON_PRETTY_PRINT);
 
@@ -175,26 +94,105 @@ if ($httpCode !== 200 || !is_array($data)) {
 }
 
 
-if (($data['status'] ?? '') !== 'success') {
+if ($longitude < -180 || $longitude > 180) {
 
     echo json_encode([
 
         "status" => "error",
 
         "message" =>
-            "Conduit returned an unsuccessful response",
-
-        "response" =>
-            $data
+            "Invalid longitude."
 
     ], JSON_PRETTY_PRINT);
 
     exit;
 }
 
+
+// ============================================================
+// 2. REQUEST UNIFIED CLIMATE DATA
+// ============================================================
+
+$providerUrl =
+    'http://localhost/Bloombot/climate_data_provider.php'
+    . '?latitude=' . urlencode($latitude)
+    . '&longitude=' . urlencode($longitude)
+    . '&monitoring_mode=' . urlencode($monitoringMode);
+
+
+$providerResponse =
+    @file_get_contents($providerUrl);
+
+
+if ($providerResponse === false) {
+
+    echo json_encode([
+
+        "status" => "error",
+
+        "message" =>
+            "Unable to connect to BloomBot Climate Data Provider.",
+
+        "provider_url" =>
+            $providerUrl
+
+    ], JSON_PRETTY_PRINT);
+
+    exit;
+}
+
+
+// ============================================================
+// 3. DECODE PROVIDER RESPONSE
+// ============================================================
+
+$providerData =
+    json_decode(
+        $providerResponse,
+        true
+    );
+
+
+if (!is_array($providerData)) {
+
+    echo json_encode([
+
+        "status" => "error",
+
+        "message" =>
+            "Invalid response from Climate Data Provider."
+
+    ], JSON_PRETTY_PRINT);
+
+    exit;
+}
+
+
+if (($providerData['status'] ?? '') !== 'success') {
+
+    echo json_encode([
+
+        "status" => "error",
+
+        "message" =>
+            "Climate Data Provider returned an unsuccessful response.",
+
+        "provider_response" =>
+            $providerData
+
+    ], JSON_PRETTY_PRINT);
+
+    exit;
+}
+
+
+// ============================================================
+// 4. GET NORMALIZED OBSERVATIONS
+// ============================================================
 
 $observations =
-    $data['data'] ?? [];
+    $providerData['observations']
+    ?? [];
 
 
 if (empty($observations)) {
@@ -204,7 +202,11 @@ if (empty($observations)) {
         "status" => "error",
 
         "message" =>
-            "No observations available"
+            "No climate observations are available for analysis.",
+
+        "source" =>
+            $providerData['source']
+            ?? null
 
     ], JSON_PRETTY_PRINT);
 
@@ -223,8 +225,9 @@ usort(
     function ($a, $b) {
 
         return
-            strtotime($b['ts'] ?? '') <=>
-            strtotime($a['ts'] ?? '');
+            strtotime($b['timestamp'] ?? '') <=>
+            strtotime($a['timestamp'] ?? '');
+
     }
 
 );
@@ -245,15 +248,21 @@ function numericValue($value)
 function calculateAverage($values)
 {
     $values = array_filter(
+
         $values,
+
         fn($value) =>
             $value !== null
+
     );
+
 
     if (count($values) === 0) {
 
         return null;
+
     }
+
 
     return
         array_sum($values) /
@@ -266,9 +275,12 @@ function calculateTrend($values)
     $values = array_values(
 
         array_filter(
+
             $values,
+
             fn($value) =>
                 $value !== null
+
         )
 
     );
@@ -283,12 +295,16 @@ function calculateTrend($values)
 
             "change" =>
                 null
+
         ];
+
     }
 
 
     $half =
-        floor(count($values) / 2);
+        floor(
+            count($values) / 2
+        );
 
 
     $recent =
@@ -307,11 +323,15 @@ function calculateTrend($values)
 
 
     $recentAverage =
-        calculateAverage($recent);
+        calculateAverage(
+            $recent
+        );
 
 
     $olderAverage =
-        calculateAverage($older);
+        calculateAverage(
+            $older
+        );
 
 
     $change =
@@ -333,6 +353,7 @@ function calculateTrend($values)
 
         $direction =
             "Decreasing";
+
     }
 
 
@@ -342,7 +363,11 @@ function calculateTrend($values)
             $direction,
 
         "change" =>
-            round($change, 2)
+            round(
+                $change,
+                2
+            )
+
     ];
 }
 
@@ -374,55 +399,71 @@ foreach ($observations as $observation) {
 
     $temperatures[] =
         numericValue(
-            $observation['temp_bmx'] ?? null
+            $observation['temperature']
+            ?? null
         );
 
 
     $humidities[] =
         numericValue(
-            $observation['humidity_sht'] ?? null
+            $observation['humidity']
+            ?? null
         );
 
 
     $winds[] =
         numericValue(
-            $observation['wind_spd'] ?? null
+            $observation['wind_speed']
+            ?? null
         );
 
 
     $heatIndexes[] =
         numericValue(
-            $observation['heat_idx'] ?? null
+            $observation['heat_index']
+            ?? null
         );
 
 
     $wetBulbs[] =
         numericValue(
-            $observation['wet_bulb_temp'] ?? null
+            $observation['wet_bulb']
+            ?? null
         );
 
 
     $wetBulbGlobes[] =
         numericValue(
-            $observation['wet_bulb_globe_temp'] ?? null
+            $observation['wet_bulb_globe']
+            ?? null
         );
 
 
+    /*
+     * Open-Meteo does not provide the same visible/infrared/UV
+     * fields as Conduit.
+     *
+     * Therefore these remain null for location-weather data.
+     */
+
     $solarVisible[] =
         numericValue(
-            $observation['si1145_vis'] ?? null
+            $observation['solar_visible']
+            ?? null
         );
 
 
     $solarInfrared[] =
         numericValue(
-            $observation['si1145_ir'] ?? null
+            $observation['solar_infrared']
+            ?? null
         );
 
 
     $uvValues[] =
         numericValue(
-            $observation['si1145_uv'] ?? null
+            $observation['uv']
+            ?? null
         );
 }
 
@@ -437,55 +478,64 @@ $current =
 
 $temperature =
     numericValue(
-        $current['temp_bmx'] ?? null
+        $current['temperature']
+        ?? null
     );
 
 
 $humidity =
     numericValue(
-        $current['humidity_sht'] ?? null
+        $current['humidity']
+        ?? null
     );
 
 
 $wind =
     numericValue(
-        $current['wind_spd'] ?? null
+        $current['wind_speed']
+        ?? null
     );
 
 
 $heatIndex =
     numericValue(
-        $current['heat_idx'] ?? null
+        $current['heat_index']
+        ?? null
     );
 
 
 $wetBulb =
     numericValue(
-        $current['wet_bulb_temp'] ?? null
+        $current['wet_bulb']
+        ?? null
     );
 
 
 $wetBulbGlobe =
     numericValue(
-        $current['wet_bulb_globe_temp'] ?? null
+        $current['wet_bulb_globe']
+        ?? null
     );
 
 
 $solar =
     numericValue(
-        $current['si1145_vis'] ?? null
+        $current['solar_visible']
+        ?? null
     );
 
 
 $infrared =
     numericValue(
-        $current['si1145_ir'] ?? null
+        $current['solar_infrared']
+        ?? null
     );
 
 
 $uv =
     numericValue(
-        $current['si1145_uv'] ?? null
+        $current['uv']
+        ?? null
     );
 
 
@@ -581,19 +631,23 @@ foreach ($humidities as $value) {
     if ($value === null) {
 
         continue;
+
     }
 
 
     if ($value >= 80) {
 
         $highHumidityCount++;
+
     }
 
 
     if ($value >= 90) {
 
         $veryHighHumidityCount++;
+
     }
+
 }
 
 
@@ -602,21 +656,26 @@ foreach ($winds as $value) {
     if ($value === null) {
 
         continue;
+
     }
 
 
     if ($value <= 1) {
 
         $lowWindCount++;
+
     }
+
 }
 
 
 $highHumidityPercentage =
     $total > 0
 
-        ? ($highHumidityCount /
-           $total) * 100
+        ? (
+            $highHumidityCount /
+            $total
+        ) * 100
 
         : 0;
 
@@ -624,8 +683,10 @@ $highHumidityPercentage =
 $veryHighHumidityPercentage =
     $total > 0
 
-        ? ($veryHighHumidityCount /
-           $total) * 100
+        ? (
+            $veryHighHumidityCount /
+            $total
+        ) * 100
 
         : 0;
 
@@ -633,8 +694,10 @@ $veryHighHumidityPercentage =
 $lowWindPercentage =
     $total > 0
 
-        ? ($lowWindCount /
-           $total) * 100
+        ? (
+            $lowWindCount /
+            $total
+        ) * 100
 
         : 0;
 
@@ -667,6 +730,7 @@ if ($temperature === null) {
 
     $temperatureStatus =
         "Hot";
+
 }
 
 
@@ -694,6 +758,7 @@ if ($humidity === null) {
 
     $humidityStatus =
         "Very High";
+
 }
 
 
@@ -716,13 +781,14 @@ if ($wind === null) {
 
     $windStatus =
         "Strong";
+
 }
 
 
 if ($heatIndex === null) {
 
     $heatStatus =
-        "Unknown";
+        "Unavailable";
 
 } elseif ($heatIndex < 27) {
 
@@ -743,6 +809,7 @@ if ($heatIndex === null) {
 
     $heatStatus =
         "Very High";
+
 }
 
 
@@ -750,96 +817,98 @@ if ($heatIndex === null) {
 // 13. CLIMATE HEALTH SCORE
 // ============================================================
 
-/*
- * Start with a perfect score.
- *
- * Points are deducted when conditions indicate
- * increased environmental stress.
- */
-
 $climateScore = 100;
 
 $scoreReasons = [];
 
 
-// High humidity
-
-if ($humidity !== null && $humidity >= 80) {
+if (
+    $humidity !== null &&
+    $humidity >= 80
+) {
 
     $climateScore -= 12;
 
     $scoreReasons[] =
         "High humidity";
+
 }
 
 
-// Persistent humidity
-
-if ($highHumidityPercentage >= 50) {
+if (
+    $highHumidityPercentage >= 50
+) {
 
     $climateScore -= 10;
 
     $scoreReasons[] =
         "Frequent high humidity";
+
 }
 
 
-// Very high humidity
-
-if ($veryHighHumidityPercentage >= 30) {
+if (
+    $veryHighHumidityPercentage >= 30
+) {
 
     $climateScore -= 8;
 
     $scoreReasons[] =
         "Repeated very high humidity";
+
 }
 
 
-// Low airflow
-
-if ($wind !== null && $wind <= 1) {
+if (
+    $wind !== null &&
+    $wind <= 1
+) {
 
     $climateScore -= 8;
 
     $scoreReasons[] =
         "Very low current airflow";
+
 }
 
 
-// Persistent low airflow
-
-if ($lowWindPercentage >= 70) {
+if (
+    $lowWindPercentage >= 70
+) {
 
     $climateScore -= 10;
 
     $scoreReasons[] =
         "Persistent low airflow";
+
 }
 
 
-// Heat
-
-if ($heatIndex !== null && $heatIndex >= 32) {
+if (
+    $heatIndex !== null &&
+    $heatIndex >= 32
+) {
 
     $climateScore -= 15;
 
     $scoreReasons[] =
         "Elevated heat conditions";
+
 }
 
 
-// Strong wind
-
-if ($wind !== null && $wind >= 8) {
+if (
+    $wind !== null &&
+    $wind >= 8
+) {
 
     $climateScore -= 8;
 
     $scoreReasons[] =
         "Strong wind";
+
 }
 
-
-// Keep score between 0 and 100
 
 $climateScore =
     max(
@@ -850,8 +919,6 @@ $climateScore =
         )
     );
 
-
-// Score interpretation
 
 if ($climateScore >= 80) {
 
@@ -872,6 +939,7 @@ if ($climateScore >= 80) {
 
     $climateHealth =
         "Critical";
+
 }
 
 
@@ -884,29 +952,30 @@ $riskScore = 0;
 $riskFactors = [];
 
 
-// Humidity
-
-if ($humidity !== null && $humidity >= 80) {
+if (
+    $humidity !== null &&
+    $humidity >= 80
+) {
 
     $riskScore += 2;
 
     $riskFactors[] =
         "High humidity";
+
 }
 
 
-// Persistent humidity
-
-if ($highHumidityPercentage >= 50) {
+if (
+    $highHumidityPercentage >= 50
+) {
 
     $riskScore += 2;
 
     $riskFactors[] =
         "Frequent high humidity";
+
 }
 
-
-// Humidity + low airflow
 
 if (
     $humidity !== null &&
@@ -919,43 +988,47 @@ if (
 
     $riskFactors[] =
         "High humidity with very low airflow";
+
 }
 
 
-// Persistent low airflow
-
-if ($lowWindPercentage >= 70) {
+if (
+    $lowWindPercentage >= 70
+) {
 
     $riskScore += 1;
 
     $riskFactors[] =
         "Persistent low airflow";
+
 }
 
 
-// Heat
-
-if ($heatIndex !== null && $heatIndex >= 32) {
+if (
+    $heatIndex !== null &&
+    $heatIndex >= 32
+) {
 
     $riskScore += 3;
 
     $riskFactors[] =
         "Elevated heat index";
+
 }
 
 
-// Strong wind
-
-if ($wind !== null && $wind >= 8) {
+if (
+    $wind !== null &&
+    $wind >= 8
+) {
 
     $riskScore += 1;
 
     $riskFactors[] =
         "Strong wind";
+
 }
 
-
-// Risk level
 
 if ($riskScore <= 2) {
 
@@ -976,6 +1049,7 @@ if ($riskScore <= 2) {
 
     $riskLevel =
         "Critical";
+
 }
 
 
@@ -1020,11 +1094,12 @@ if (
 
     $primaryDriver =
         "Strong Wind";
+
 }
 
 
 // ============================================================
-// 16. "WHAT CHANGED?" ANALYSIS
+// 16. WHAT CHANGED?
 // ============================================================
 
 $changes = [];
@@ -1054,7 +1129,9 @@ if (
                 1
             ) .
             "°C below the recent average.";
+
     }
+
 }
 
 
@@ -1082,7 +1159,9 @@ if (
                 1
             ) .
             " percentage points below the recent average.";
+
     }
+
 }
 
 
@@ -1093,6 +1172,7 @@ if (
 
     $changes[] =
         "Temperature is trending upward.";
+
 }
 
 
@@ -1103,6 +1183,7 @@ if (
 
     $changes[] =
         "Humidity is trending upward.";
+
 }
 
 
@@ -1113,6 +1194,7 @@ if (
 
     $changes[] =
         "Humidity is trending downward.";
+
 }
 
 
@@ -1120,21 +1202,13 @@ if (empty($changes)) {
 
     $changes[] =
         "No major climate shift was detected in the available observations.";
+
 }
 
 
 // ============================================================
 // 17. CROP INTELLIGENCE
 // ============================================================
-
-/*
- * We currently don't know which crop the gardener has selected.
- *
- * Therefore V3 creates a general crop-risk interpretation.
- *
- * Once connected to the BloomBot plants table,
- * this can become crop-specific.
- */
 
 $cropRisk =
     "Low";
@@ -1165,6 +1239,7 @@ if (
 
     $cropAction =
         "Monitor foliage closely and improve airflow around crops where possible.";
+
 }
 
 
@@ -1183,6 +1258,7 @@ if (
 
     $cropAction =
         "Monitor crop water requirements and signs of heat stress.";
+
 }
 
 
@@ -1211,6 +1287,7 @@ if (
 
     $irrigationRecommendation =
         "Avoid automatically increasing irrigation solely because of climate conditions; check soil moisture first.";
+
 }
 
 
@@ -1225,6 +1302,7 @@ if (
 
     $irrigationRecommendation =
         "Check soil moisture more frequently because elevated heat may increase water demand.";
+
 }
 
 
@@ -1234,8 +1312,6 @@ if (
 
 $insights = [];
 
-
-// Humidity
 
 if (
     $humidity !== null &&
@@ -1247,20 +1323,16 @@ if (
     $insights[] =
         "High humidity is currently occurring alongside very low airflow.";
 
-}
-
-
-elseif (
+} elseif (
     $humidity !== null &&
     $humidity >= 80
 ) {
 
     $insights[] =
         "Current humidity is high and may increase moisture retention around crops.";
+
 }
 
-
-// Temperature trend
 
 if (
     $temperatureTrend['direction'] ===
@@ -1269,6 +1341,7 @@ if (
 
     $insights[] =
         "Temperature is trending upward compared with the earlier observations.";
+
 }
 
 
@@ -1279,10 +1352,9 @@ if (
 
     $insights[] =
         "Temperature is trending downward compared with the earlier observations.";
+
 }
 
-
-// Heat
 
 if (
     $heatIndex !== null &&
@@ -1291,24 +1363,23 @@ if (
 
     $insights[] =
         "Elevated heat conditions have been detected.";
+
 }
 
-
-// Low airflow persistence
 
 if ($lowWindPercentage >= 70) {
 
     $insights[] =
         "Low airflow has been persistent across most available observations.";
+
 }
 
-
-// Fallback
 
 if (empty($insights)) {
 
     $insights[] =
         "Current environmental conditions appear relatively stable.";
+
 }
 
 
@@ -1328,6 +1399,7 @@ if (
 
     $recommendations[] =
         "Monitor crop foliage and maintain airflow where possible.";
+
 }
 
 
@@ -1338,6 +1410,7 @@ if (
 
     $recommendations[] =
         "Monitor irrigation demand as temperature increases.";
+
 }
 
 
@@ -1348,6 +1421,7 @@ if (
 
     $recommendations[] =
         "Monitor crops for signs of heat stress and check soil moisture more frequently.";
+
 }
 
 
@@ -1358,6 +1432,7 @@ if (
 
     $recommendations[] =
         "Monitor exposed crops and irrigation efficiency during strong winds.";
+
 }
 
 
@@ -1365,6 +1440,7 @@ if (empty($recommendations)) {
 
     $recommendations[] =
         "Continue normal monitoring and compare future readings with the current baseline.";
+
 }
 
 
@@ -1381,6 +1457,7 @@ if ($humidity !== null) {
         "Current humidity: " .
         $humidity .
         "%";
+
 }
 
 
@@ -1390,6 +1467,7 @@ if ($wind !== null) {
         "Current wind speed: " .
         $wind .
         " m/s";
+
 }
 
 
@@ -1402,6 +1480,7 @@ if ($humidityAverage !== null) {
             2
         ) .
         "%";
+
 }
 
 
@@ -1414,6 +1493,7 @@ if ($temperatureAverage !== null) {
             2
         ) .
         "°C";
+
 }
 
 
@@ -1427,7 +1507,21 @@ $evidence[] =
 
 
 // ============================================================
-// 22. FINAL RESPONSE
+// 22. SOURCE INFORMATION
+// ============================================================
+
+$source =
+    $providerData['source']
+    ?? null;
+
+
+$dataQuality =
+    $providerData['data_quality']
+    ?? [];
+
+
+// ============================================================
+// 23. FINAL RESPONSE
 // ============================================================
 
 $output = [
@@ -1442,18 +1536,44 @@ $output = [
             "BloomBot Climate Intelligence",
 
         "version" =>
-            "3.0",
+            "3.1",
 
         "data_source" =>
-            "JKUAT Conduit",
+            $source['provider']
+            ?? "Unknown",
+
+        "source_type" =>
+            $source['type']
+            ?? $source['data_type']
+            ?? "Unknown",
 
         "observations_analyzed" =>
             $total
+
     ],
 
 
+    "location" => [
+
+        "latitude" =>
+            $latitude,
+
+        "longitude" =>
+            $longitude
+
+    ],
+
+
+    "source" =>
+        $source,
+
+        "observations" =>
+            $observations,
+
+
     "timestamp" =>
-        $current['ts'] ?? null,
+        $current['timestamp']
+        ?? null,
 
 
     "current_conditions" => [
@@ -1468,6 +1588,7 @@ $output = [
 
             "status" =>
                 $temperatureStatus
+
         ],
 
 
@@ -1481,6 +1602,7 @@ $output = [
 
             "status" =>
                 $humidityStatus
+
         ],
 
 
@@ -1494,6 +1616,7 @@ $output = [
 
             "status" =>
                 $windStatus
+
         ],
 
 
@@ -1507,6 +1630,7 @@ $output = [
 
             "status" =>
                 $heatStatus
+
         ],
 
 
@@ -1517,6 +1641,7 @@ $output = [
 
             "unit" =>
                 "°C"
+
         ],
 
 
@@ -1527,7 +1652,9 @@ $output = [
 
             "unit" =>
                 "°C"
+
         ]
+
     ],
 
 
@@ -1541,6 +1668,7 @@ $output = [
 
         "reasons" =>
             $scoreReasons
+
     ],
 
 
@@ -1554,7 +1682,6 @@ $output = [
                 )
                 : null,
 
-
         "humidity_average" =>
             $humidityAverage !== null
                 ? round(
@@ -1562,7 +1689,6 @@ $output = [
                     2
                 )
                 : null,
-
 
         "wind_average" =>
             $windAverage !== null
@@ -1572,7 +1698,6 @@ $output = [
                 )
                 : null,
 
-
         "heat_index_average" =>
             $heatAverage !== null
                 ? round(
@@ -1580,6 +1705,7 @@ $output = [
                     2
                 )
                 : null
+
     ],
 
 
@@ -1593,6 +1719,7 @@ $output = [
 
         "wind" =>
             $windTrend
+
     ],
 
 
@@ -1615,6 +1742,7 @@ $output = [
                 $lowWindPercentage,
                 1
             )
+
     ],
 
 
@@ -1635,6 +1763,7 @@ $output = [
 
         "factors" =>
             $riskFactors
+
     ],
 
 
@@ -1648,6 +1777,7 @@ $output = [
 
         "recommended_action" =>
             $cropAction
+
     ],
 
 
@@ -1658,6 +1788,7 @@ $output = [
 
         "recommendation" =>
             $irrigationRecommendation
+
     ],
 
 
@@ -1671,6 +1802,7 @@ $output = [
 
         "evidence" =>
             $evidence
+
     ],
 
 
@@ -1684,26 +1816,43 @@ $output = [
 
         "uv" =>
             $uv
+
     ],
 
 
     "data_quality" => [
 
         "rainfall_interpretation" =>
-            "Pending Conduit field validation",
+            $dataQuality['rainfall_interpretation']
+            ?? "Not available",
 
         "ml_prediction" =>
             "Not yet enabled",
 
+        "source_type" =>
+            $dataQuality['source_type']
+            ?? null,
+
+        "direct_sensor_measurement" =>
+            $dataQuality['direct_sensor_measurement']
+            ?? null,
+
         "note" =>
-            "Current intelligence uses transparent rule-based analysis of live environmental observations."
+            $dataQuality['note']
+            ?? "Climate intelligence currently uses transparent rule-based analysis of normalized environmental observations."
+
     ]
 
 ];
 
 
 echo json_encode(
+
     $output,
+
     JSON_PRETTY_PRINT |
     JSON_UNESCAPED_UNICODE
+
 );
+
+?>
