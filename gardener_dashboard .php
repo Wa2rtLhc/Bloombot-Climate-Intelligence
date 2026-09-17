@@ -658,7 +658,64 @@ if (!empty($plants)) {
         </div>
 
     </div>
+<?php
+$ml_prediction =
+    $climate_intelligence['ml_prediction']
+    ?? null;
+?>
 
+<?php if (
+    is_array($ml_prediction) &&
+    ($ml_prediction['status'] ?? '') === 'success'
+): ?>
+
+<div class="ai-forecast-card">
+
+    <div class="ai-forecast-icon">
+        ✦
+    </div>
+
+    <div class="ai-forecast-content">
+
+        <div class="ai-forecast-label">
+            AI FORECAST
+        </div>
+
+        <div class="ai-forecast-main">
+
+            <strong>
+                <?= htmlspecialchars(
+                    $ml_prediction['risk_level']
+                    ?? 'Unknown'
+                ) ?>
+            </strong>
+
+            <span>
+                <?= htmlspecialchars(
+                    $ml_prediction['risk_probability']
+                    ?? '--'
+                ) ?>%
+            </span>
+
+        </div>
+
+        <p>
+            Predicted climate risk for the
+            <?= htmlspecialchars(
+                $ml_prediction['prediction_horizon']
+                ?? 'next 6 hours'
+            ) ?>.
+        </p>
+
+    </div>
+
+    <div class="ai-forecast-badge">
+        ML
+    </div>
+
+</div>
+
+<?php endif; ?>
 
     <div class="modern-climate-metrics">
 

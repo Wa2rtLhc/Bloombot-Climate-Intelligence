@@ -234,7 +234,48 @@ function generateClimateNotifications(
         $events[] = $message;
     }
 
+/*
+    |--------------------------------------------------------------------------
+    | 6. ML PREDICTED CLIMATE RISK
+    |--------------------------------------------------------------------------
+    */
 
+    $ml_prediction =
+        $climate_intelligence['ml_prediction'] ?? null;
+
+    if (
+        !$has_sensor &&
+        is_array($ml_prediction) &&
+        ($ml_prediction['status'] ?? '') === 'success'
+    ) {
+
+        $ml_risk_level =
+            $ml_prediction['risk_level'] ?? '';
+
+        $ml_probability =
+            $ml_prediction['risk_probability'] ?? null;
+
+        $ml_horizon =
+            $ml_prediction['prediction_horizon']
+            ?? 'next 6 hours';
+
+
+        if (
+            $ml_risk_level === "High" ||
+            $ml_risk_level === "Critical"
+        ) {
+
+            $message =
+                "AI climate forecast for {$plant_name}: " .
+                "BloomBot predicts {$ml_risk_level} climate risk " .
+                "within the {$ml_horizon}. " .
+                "Risk probability: " .
+                round((float)$ml_probability, 1) .
+                "%. " .
+                "Review the climate conditions and recommended actions.";
+
+            $events[] = $message;
+        }
     /*
     |--------------------------------------------------------------------------
     | SAVE EVENTS
@@ -261,4 +302,6 @@ function generateClimateNotifications(
         'detected' => count($events),
         'created' => $created
     ];
+}
+return $events;
 }

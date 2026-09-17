@@ -1,50 +1,10 @@
 <?php
 
-/**
- * ============================================================
- * BLOOMBOT CLIMATE INTELLIGENCE ENGINE
- * VERSION 3.1 - LOCATION AWARE
- * ============================================================
- *
- * Data pipeline:
- *
- * Plant location
- *       ↓
- * Climate Data Provider
- *       ↓
- * Climate Source Manager
- *       ↓
- * ┌───────────────────────────────┐
- * │ Plant Sensor                  │
- * │ Nearby Environmental Station  │
- * │ Location-based Weather Model  │
- * └───────────────────────────────┘
- *       ↓
- * Normalized observations
- *       ↓
- * Climate analysis
- *       ↓
- * Baseline + trends + persistence
- *       ↓
- * Climate Health Score
- *       ↓
- * Crop intelligence
- *       ↓
- * Actionable recommendations
- *
- * IMPORTANT:
- * This engine does NOT call JKUAT Conduit directly anymore.
- *
- * The climate_data_provider.php file decides which source
- * should be used based on the plant's location.
- */
-
-
 header('Content-Type: application/json');
 
 
 // ============================================================
-// 1. INPUT
+// 1. INPUT VALIDATION
 // ============================================================
 
 $latitude = isset($_GET['latitude'])
@@ -55,54 +15,16 @@ $longitude = isset($_GET['longitude'])
     ? (float) $_GET['longitude']
     : null;
 
-$monitoringMode =
+$monitoring_mode =
     $_GET['monitoring_mode']
     ?? 'environmental_station';
 
 
-// ------------------------------------------------------------
-// VALIDATE LOCATION
-// ------------------------------------------------------------
-
 if ($latitude === null || $longitude === null) {
 
     echo json_encode([
-
-        "status" => "error",
-
-        "message" =>
-            "Latitude and longitude are required."
-
-    ], JSON_PRETTY_PRINT);
-
-    exit;
-}
-
-
-if ($latitude < -90 || $latitude > 90) {
-
-    echo json_encode([
-
-        "status" => "error",
-
-        "message" =>
-            "Invalid latitude."
-
-    ], JSON_PRETTY_PRINT);
-
-    exit;
-}
-
-
-if ($longitude < -180 || $longitude > 180) {
-
-    echo json_encode([
-
-        "status" => "error",
-
-        "message" =>
-            "Invalid longitude."
-
+        'status' => 'error',
+        'message' => 'Latitude and longitude are required.'
     ], JSON_PRETTY_PRINT);
 
     exit;
@@ -110,41 +32,70 @@ if ($longitude < -180 || $longitude > 180) {
 
 
 // ============================================================
-// 2. REQUEST UNIFIED CLIMATE DATA
+// 2. GET CLIMATE DATA FROM PROVIDER
 // ============================================================
 
 $providerUrl =
     'http://localhost/Bloombot/climate_data_provider.php'
     . '?latitude=' . urlencode($latitude)
     . '&longitude=' . urlencode($longitude)
-    . '&monitoring_mode=' . urlencode($monitoringMode);
+    . '&monitoring_mode=' . urlencode($monitoring_mode);
+
+
+$ch = curl_init($providerUrl);
+
+curl_setopt_array($ch, [
+
+    CURLOPT_RETURNTRANSFER => true,
+
+    CURLOPT_CONNECTTIMEOUT => 5,
+
+    CURLOPT_TIMEOUT => 30,
+
+    CURLOPT_FOLLOWLOCATION => true
+
+]);
 
 
 $providerResponse =
-    @file_get_contents($providerUrl);
+    curl_exec($ch);
 
 
-if ($providerResponse === false) {
+$providerHttpCode =
+    curl_getinfo(
+        $ch,
+        CURLINFO_HTTP_CODE
+    );
+
+
+$providerError =
+    curl_error($ch);
+
+
+curl_close($ch);
+
+
+if (
+    $providerResponse === false ||
+    $providerHttpCode < 200 ||
+    $providerHttpCode >= 300
+) {
 
     echo json_encode([
 
-        "status" => "error",
+        'status' => 'error',
 
-        "message" =>
-            "Unable to connect to BloomBot Climate Data Provider.",
+        'message' =>
+            'Unable to retrieve climate data.',
 
-        "provider_url" =>
-            $providerUrl
+        'details' =>
+            $providerError
 
     ], JSON_PRETTY_PRINT);
 
     exit;
 }
 
-
-// ============================================================
-// 3. DECODE PROVIDER RESPONSE
-// ============================================================
 
 $providerData =
     json_decode(
@@ -153,31 +104,19 @@ $providerData =
     );
 
 
-if (!is_array($providerData)) {
+if (
+    !is_array($providerData) ||
+    ($providerData['status'] ?? '') !== 'success'
+) {
 
     echo json_encode([
 
-        "status" => "error",
+        'status' => 'error',
 
-        "message" =>
-            "Invalid response from Climate Data Provider."
+        'message' =>
+            'Invalid climate data provider response.',
 
-    ], JSON_PRETTY_PRINT);
-
-    exit;
-}
-
-
-if (($providerData['status'] ?? '') !== 'success') {
-
-    echo json_encode([
-
-        "status" => "error",
-
-        "message" =>
-            "Climate Data Provider returned an unsuccessful response.",
-
-        "provider_response" =>
+        'provider_response' =>
             $providerData
 
     ], JSON_PRETTY_PRINT);
@@ -187,7 +126,20 @@ if (($providerData['status'] ?? '') !== 'success') {
 
 
 // ============================================================
-// 4. GET NORMALIZED OBSERVATIONS
+// 3. SOURCE INFORMATION
+// ============================================================
+
+$source =
+    $providerData['source']
+    ?? [];
+
+$sourceDataQuality =
+    $providerData['data_quality']
+    ?? [];
+
+
+// ============================================================
+// 4. OBSERVATIONS
 // ============================================================
 
 $observations =
@@ -195,27 +147,15 @@ $observations =
     ?? [];
 
 
-if (empty($observations)) {
+if (!is_array($observations)) {
 
-    echo json_encode([
+    $observations = [];
 
-        "status" => "error",
-
-        "message" =>
-            "No climate observations are available for analysis.",
-
-        "source" =>
-            $providerData['source']
-            ?? null
-
-    ], JSON_PRETTY_PRINT);
-
-    exit;
 }
 
 
 // ============================================================
-// 5. SORT OBSERVATIONS
+// 5. SORT OBSERVATIONS — NEWEST FIRST
 // ============================================================
 
 usort(
@@ -224,10 +164,19 @@ usort(
 
     function ($a, $b) {
 
-        return
-            strtotime($b['timestamp'] ?? '') <=>
-            strtotime($a['timestamp'] ?? '');
+        $timeA =
+            strtotime(
+                $a['timestamp']
+                ?? ''
+            );
 
+        $timeB =
+            strtotime(
+                $b['timestamp']
+                ?? ''
+            );
+
+        return $timeB <=> $timeA;
     }
 
 );
@@ -239,130 +188,116 @@ usort(
 
 function numericValue($value)
 {
-    return is_numeric($value)
-        ? (float)$value
-        : null;
+    if (
+        $value === null ||
+        $value === '' ||
+        !is_numeric($value)
+    ) {
+
+        return null;
+    }
+
+    return (float) $value;
 }
 
 
 function calculateAverage($values)
 {
-    $values = array_filter(
+    $clean = [];
 
-        $values,
+    foreach ($values as $value) {
 
-        fn($value) =>
-            $value !== null
+        if (
+            $value !== null &&
+            is_numeric($value)
+        ) {
 
-    );
-
-
-    if (count($values) === 0) {
-
-        return null;
-
+            $clean[] =
+                (float) $value;
+        }
     }
 
 
-    return
-        array_sum($values) /
-        count($values);
+    if (count($clean) === 0) {
+
+        return null;
+    }
+
+
+    return array_sum($clean)
+        / count($clean);
 }
 
 
 function calculateTrend($values)
 {
-    $values = array_values(
+    $clean = [];
 
-        array_filter(
+    foreach ($values as $value) {
 
-            $values,
+        if (
+            $value !== null &&
+            is_numeric($value)
+        ) {
 
-            fn($value) =>
-                $value !== null
-
-        )
-
-    );
-
-
-    if (count($values) < 4) {
-
-        return [
-
-            "direction" =>
-                "Insufficient Data",
-
-            "change" =>
-                null
-
-        ];
-
+            $clean[] =
+                (float) $value;
+        }
     }
 
 
-    $half =
-        floor(
-            count($values) / 2
-        );
+    if (count($clean) < 2) {
+
+        return [
+
+            'direction' =>
+                'stable',
+
+            'change' =>
+                0
+
+        ];
+    }
 
 
-    $recent =
-        array_slice(
-            $values,
-            0,
-            $half
-        );
+    /*
+     * Observations are sorted newest first.
+     */
 
+    $current =
+        $clean[0];
 
-    $older =
-        array_slice(
-            $values,
-            $half
-        );
-
-
-    $recentAverage =
-        calculateAverage(
-            $recent
-        );
-
-
-    $olderAverage =
-        calculateAverage(
-            $older
-        );
+    $oldest =
+        $clean[count($clean) - 1];
 
 
     $change =
-        $recentAverage -
-        $olderAverage;
+        $current - $oldest;
 
 
-    if (abs($change) < 0.5) {
-
-        $direction =
-            "Stable";
-
-    } elseif ($change > 0) {
+    if ($change > 0.5) {
 
         $direction =
-            "Increasing";
+            'rising';
+
+    } elseif ($change < -0.5) {
+
+        $direction =
+            'falling';
 
     } else {
 
         $direction =
-            "Decreasing";
-
+            'stable';
     }
 
 
     return [
 
-        "direction" =>
+        'direction' =>
             $direction,
 
-        "change" =>
+        'change' =>
             round(
                 $change,
                 2
@@ -373,25 +308,17 @@ function calculateTrend($values)
 
 
 // ============================================================
-// 7. EXTRACT VARIABLES
+// 7. EXTRACT NORMALIZED CLIMATE ARRAYS
 // ============================================================
 
 $temperatures = [];
-
 $humidities = [];
-
 $winds = [];
-
 $heatIndexes = [];
-
 $wetBulbs = [];
-
 $wetBulbGlobes = [];
-
 $solarVisible = [];
-
 $solarInfrared = [];
-
 $uvValues = [];
 
 
@@ -439,13 +366,6 @@ foreach ($observations as $observation) {
         );
 
 
-    /*
-     * Open-Meteo does not provide the same visible/infrared/UV
-     * fields as Conduit.
-     *
-     * Therefore these remain null for location-weather data.
-     */
-
     $solarVisible[] =
         numericValue(
             $observation['solar_visible']
@@ -472,69 +392,72 @@ foreach ($observations as $observation) {
 // 8. CURRENT CONDITIONS
 // ============================================================
 
-$current =
-    $observations[0];
+$currentObservation =
+    $observations[0]
+    ?? [];
+
+
+/*
+ * IMPORTANT:
+ * climate_data_provider.php already normalizes the data.
+ *
+ * We therefore use:
+ *
+ * temperature
+ * humidity
+ * wind_speed
+ * heat_index
+ * wet_bulb
+ * wet_bulb_globe
+ * solar_visible
+ */
 
 
 $temperature =
     numericValue(
-        $current['temperature']
+        $currentObservation['temperature']
         ?? null
     );
 
 
 $humidity =
     numericValue(
-        $current['humidity']
+        $currentObservation['humidity']
         ?? null
     );
 
 
 $wind =
     numericValue(
-        $current['wind_speed']
+        $currentObservation['wind_speed']
         ?? null
     );
 
 
 $heatIndex =
     numericValue(
-        $current['heat_index']
+        $currentObservation['heat_index']
         ?? null
     );
 
 
 $wetBulb =
     numericValue(
-        $current['wet_bulb']
+        $currentObservation['wet_bulb']
         ?? null
     );
 
 
 $wetBulbGlobe =
     numericValue(
-        $current['wet_bulb_globe']
+        $currentObservation['wet_bulb_globe']
         ?? null
     );
 
 
 $solar =
     numericValue(
-        $current['solar_visible']
-        ?? null
-    );
-
-
-$infrared =
-    numericValue(
-        $current['solar_infrared']
-        ?? null
-    );
-
-
-$uv =
-    numericValue(
-        $current['uv']
+        $currentObservation['solar_visible']
         ?? null
     );
 
@@ -561,255 +484,191 @@ $windAverage =
     );
 
 
-$heatAverage =
-    calculateAverage(
-        $heatIndexes
-    );
+$baselines = [
 
+    'temperature' =>
+        $temperatureAverage !== null
+            ? round(
+                $temperatureAverage,
+                2
+            )
+            : null,
 
-// Differences from baseline
+    'humidity' =>
+        $humidityAverage !== null
+            ? round(
+                $humidityAverage,
+                2
+            )
+            : null,
 
-$temperatureDifference =
-    $temperature !== null &&
-    $temperatureAverage !== null
+    'wind_speed' =>
+        $windAverage !== null
+            ? round(
+                $windAverage,
+                2
+            )
+            : null
 
-        ? $temperature -
-          $temperatureAverage
-
-        : null;
-
-
-$humidityDifference =
-    $humidity !== null &&
-    $humidityAverage !== null
-
-        ? $humidity -
-          $humidityAverage
-
-        : null;
+];
 
 
 // ============================================================
 // 10. TRENDS
 // ============================================================
 
-$temperatureTrend =
-    calculateTrend(
-        $temperatures
-    );
+$trends = [
 
+    'temperature' =>
+        calculateTrend(
+            $temperatures
+        ),
 
-$humidityTrend =
-    calculateTrend(
-        $humidities
-    );
+    'humidity' =>
+        calculateTrend(
+            $humidities
+        ),
 
+    'wind_speed' =>
+        calculateTrend(
+            $winds
+        )
 
-$windTrend =
-    calculateTrend(
-        $winds
-    );
+];
 
 
 // ============================================================
 // 11. PERSISTENCE
 // ============================================================
 
-$total =
-    count($observations);
+$recentTemperatures =
+    array_slice(
+        $temperatures,
+        0,
+        min(
+            6,
+            count($temperatures)
+        )
+    );
 
 
-$highHumidityCount = 0;
-
-$veryHighHumidityCount = 0;
-
-$lowWindCount = 0;
-
-
-foreach ($humidities as $value) {
-
-    if ($value === null) {
-
-        continue;
-
-    }
+$recentHumidity =
+    array_slice(
+        $humidities,
+        0,
+        min(
+            6,
+            count($humidities)
+        )
+    );
 
 
-    if ($value >= 80) {
-
-        $highHumidityCount++;
-
-    }
-
-
-    if ($value >= 90) {
-
-        $veryHighHumidityCount++;
-
-    }
-
-}
+$recentWind =
+    array_slice(
+        $winds,
+        0,
+        min(
+            6,
+            count($winds)
+        )
+    );
 
 
-foreach ($winds as $value) {
-
-    if ($value === null) {
-
-        continue;
-
-    }
+$humidityPersistence =
+    calculateAverage(
+        $recentHumidity
+    );
 
 
-    if ($value <= 1) {
-
-        $lowWindCount++;
-
-    }
-
-}
+$temperaturePersistence =
+    calculateAverage(
+        $recentTemperatures
+    );
 
 
-$highHumidityPercentage =
-    $total > 0
-
-        ? (
-            $highHumidityCount /
-            $total
-        ) * 100
-
-        : 0;
-
-
-$veryHighHumidityPercentage =
-    $total > 0
-
-        ? (
-            $veryHighHumidityCount /
-            $total
-        ) * 100
-
-        : 0;
-
-
-$lowWindPercentage =
-    $total > 0
-
-        ? (
-            $lowWindCount /
-            $total
-        ) * 100
-
-        : 0;
+$windPersistence =
+    calculateAverage(
+        $recentWind
+    );
 
 
 // ============================================================
-// 12. CURRENT STATUS
+// 12. CONDITION STATUS
 // ============================================================
 
 if ($temperature === null) {
 
     $temperatureStatus =
-        "Unknown";
+        'Unknown';
 
-} elseif ($temperature < 10) {
-
-    $temperatureStatus =
-        "Cold";
-
-} elseif ($temperature <= 28) {
+} elseif ($temperature >= 32) {
 
     $temperatureStatus =
-        "Favorable";
+        'High';
 
-} elseif ($temperature <= 32) {
+} elseif ($temperature <= 10) {
 
     $temperatureStatus =
-        "Warm";
+        'Low';
 
 } else {
 
     $temperatureStatus =
-        "Hot";
-
+        'Favorable';
 }
 
 
 if ($humidity === null) {
 
     $humidityStatus =
-        "Unknown";
+        'Unknown';
 
-} elseif ($humidity < 40) {
-
-    $humidityStatus =
-        "Low";
-
-} elseif ($humidity <= 70) {
+} elseif ($humidity >= 85) {
 
     $humidityStatus =
-        "Comfortable";
+        'Very High';
 
-} elseif ($humidity < 85) {
+} elseif ($humidity >= 70) {
 
     $humidityStatus =
-        "High";
+        'High';
+
+} elseif ($humidity < 35) {
+
+    $humidityStatus =
+        'Low';
 
 } else {
 
     $humidityStatus =
-        "Very High";
-
+        'Favorable';
 }
 
 
 if ($wind === null) {
 
     $windStatus =
-        "Unknown";
+        'Unknown';
 
-} elseif ($wind < 1) {
-
-    $windStatus =
-        "Very Low";
-
-} elseif ($wind < 4) {
+} elseif ($wind <= 1) {
 
     $windStatus =
-        "Moderate";
+        'Very Low';
+
+} elseif ($wind <= 3) {
+
+    $windStatus =
+        'Low';
+
+} elseif ($wind <= 8) {
+
+    $windStatus =
+        'Favorable';
 
 } else {
 
     $windStatus =
-        "Strong";
-
-}
-
-
-if ($heatIndex === null) {
-
-    $heatStatus =
-        "Unavailable";
-
-} elseif ($heatIndex < 27) {
-
-    $heatStatus =
-        "Low";
-
-} elseif ($heatIndex < 32) {
-
-    $heatStatus =
-        "Moderate";
-
-} elseif ($heatIndex < 41) {
-
-    $heatStatus =
-        "High";
-
-} else {
-
-    $heatStatus =
-        "Very High";
-
+        'High';
 }
 
 
@@ -817,239 +676,209 @@ if ($heatIndex === null) {
 // 13. CLIMATE HEALTH SCORE
 // ============================================================
 
-$climateScore = 100;
-
-$scoreReasons = [];
+$healthScore = 100;
 
 
-if (
-    $humidity !== null &&
-    $humidity >= 80
-) {
+if ($temperature !== null) {
 
-    $climateScore -= 12;
+    if ($temperature >= 35) {
 
-    $scoreReasons[] =
-        "High humidity";
+        $healthScore -= 30;
 
+    } elseif ($temperature >= 32) {
+
+        $healthScore -= 20;
+
+    } elseif ($temperature <= 5) {
+
+        $healthScore -= 30;
+
+    } elseif ($temperature <= 10) {
+
+        $healthScore -= 15;
+    }
 }
 
 
-if (
-    $highHumidityPercentage >= 50
-) {
+if ($humidity !== null) {
 
-    $climateScore -= 10;
+    if ($humidity >= 90) {
 
-    $scoreReasons[] =
-        "Frequent high humidity";
+        $healthScore -= 25;
 
+    } elseif ($humidity >= 80) {
+
+        $healthScore -= 15;
+
+    } elseif ($humidity < 30) {
+
+        $healthScore -= 20;
+
+    } elseif ($humidity < 40) {
+
+        $healthScore -= 10;
+    }
 }
 
 
-if (
-    $veryHighHumidityPercentage >= 30
-) {
+if ($wind !== null) {
 
-    $climateScore -= 8;
+    if ($wind <= 0.5) {
 
-    $scoreReasons[] =
-        "Repeated very high humidity";
+        $healthScore -= 15;
 
+    } elseif ($wind <= 1) {
+
+        $healthScore -= 8;
+    }
 }
 
 
-if (
-    $wind !== null &&
-    $wind <= 1
-) {
-
-    $climateScore -= 8;
-
-    $scoreReasons[] =
-        "Very low current airflow";
-
-}
-
-
-if (
-    $lowWindPercentage >= 70
-) {
-
-    $climateScore -= 10;
-
-    $scoreReasons[] =
-        "Persistent low airflow";
-
-}
-
-
-if (
-    $heatIndex !== null &&
-    $heatIndex >= 32
-) {
-
-    $climateScore -= 15;
-
-    $scoreReasons[] =
-        "Elevated heat conditions";
-
-}
-
-
-if (
-    $wind !== null &&
-    $wind >= 8
-) {
-
-    $climateScore -= 8;
-
-    $scoreReasons[] =
-        "Strong wind";
-
-}
-
-
-$climateScore =
+$healthScore =
     max(
         0,
         min(
             100,
-            $climateScore
+            $healthScore
         )
     );
 
 
-if ($climateScore >= 80) {
+if ($healthScore >= 80) {
 
-    $climateHealth =
-        "Good";
+    $healthStatus =
+        'Healthy';
 
-} elseif ($climateScore >= 60) {
+} elseif ($healthScore >= 60) {
 
-    $climateHealth =
-        "Moderate";
+    $healthStatus =
+        'Watch';
 
-} elseif ($climateScore >= 40) {
+} elseif ($healthScore >= 40) {
 
-    $climateHealth =
-        "Warning";
+    $healthStatus =
+        'Stressed';
 
 } else {
 
-    $climateHealth =
-        "Critical";
-
+    $healthStatus =
+        'Critical';
 }
 
 
 // ============================================================
-// 14. RISK SCORING
+// 14. RULE-BASED CLIMATE RISK
 // ============================================================
 
 $riskScore = 0;
 
-$riskFactors = [];
+$riskDrivers = [];
 
 
-if (
-    $humidity !== null &&
-    $humidity >= 80
-) {
+if ($temperature !== null) {
 
-    $riskScore += 2;
+    if ($temperature >= 35) {
 
-    $riskFactors[] =
-        "High humidity";
+        $riskScore += 35;
 
+        $riskDrivers[] =
+            'High temperature';
+
+    } elseif ($temperature >= 32) {
+
+        $riskScore += 20;
+
+        $riskDrivers[] =
+            'Elevated temperature';
+
+    } elseif ($temperature <= 5) {
+
+        $riskScore += 30;
+
+        $riskDrivers[] =
+            'Low temperature';
+
+    } elseif ($temperature <= 10) {
+
+        $riskScore += 15;
+
+        $riskDrivers[] =
+            'Cool conditions';
+    }
 }
 
 
-if (
-    $highHumidityPercentage >= 50
-) {
+if ($humidity !== null) {
 
-    $riskScore += 2;
+    if ($humidity >= 90) {
 
-    $riskFactors[] =
-        "Frequent high humidity";
+        $riskScore += 30;
 
+        $riskDrivers[] =
+            'Very high humidity';
+
+    } elseif ($humidity >= 80) {
+
+        $riskScore += 20;
+
+        $riskDrivers[] =
+            'High humidity';
+
+    } elseif ($humidity < 30) {
+
+        $riskScore += 25;
+
+        $riskDrivers[] =
+            'Low humidity';
+    }
 }
 
 
-if (
-    $humidity !== null &&
-    $humidity >= 80 &&
-    $wind !== null &&
-    $wind <= 1
-) {
+if ($wind !== null) {
 
-    $riskScore += 2;
+    if ($wind <= 0.5) {
 
-    $riskFactors[] =
-        "High humidity with very low airflow";
+        $riskScore += 20;
 
+        $riskDrivers[] =
+            'Very low airflow';
+
+    } elseif ($wind <= 1) {
+
+        $riskScore += 10;
+
+        $riskDrivers[] =
+            'Low airflow';
+    }
 }
 
 
-if (
-    $lowWindPercentage >= 70
-) {
-
-    $riskScore += 1;
-
-    $riskFactors[] =
-        "Persistent low airflow";
-
-}
+$riskScore =
+    min(
+        100,
+        $riskScore
+    );
 
 
-if (
-    $heatIndex !== null &&
-    $heatIndex >= 32
-) {
-
-    $riskScore += 3;
-
-    $riskFactors[] =
-        "Elevated heat index";
-
-}
-
-
-if (
-    $wind !== null &&
-    $wind >= 8
-) {
-
-    $riskScore += 1;
-
-    $riskFactors[] =
-        "Strong wind";
-
-}
-
-
-if ($riskScore <= 2) {
+if ($riskScore >= 70) {
 
     $riskLevel =
-        "Low";
+        'Critical';
 
-} elseif ($riskScore <= 5) {
-
-    $riskLevel =
-        "Moderate";
-
-} elseif ($riskScore <= 8) {
+} elseif ($riskScore >= 45) {
 
     $riskLevel =
-        "High";
+        'High';
+
+} elseif ($riskScore >= 20) {
+
+    $riskLevel =
+        'Moderate';
 
 } else {
 
     $riskLevel =
-        "Critical";
-
+        'Low';
 }
 
 
@@ -1058,151 +887,64 @@ if ($riskScore <= 2) {
 // ============================================================
 
 $primaryDriver =
-    "Stable conditions";
-
-
-if (
-    $humidity !== null &&
-    $humidity >= 80 &&
-    $wind !== null &&
-    $wind <= 1
-) {
-
-    $primaryDriver =
-        "Humidity + Low Airflow";
-
-} elseif (
-    $humidity !== null &&
-    $humidity >= 80
-) {
-
-    $primaryDriver =
-        "Humidity";
-
-} elseif (
-    $heatIndex !== null &&
-    $heatIndex >= 32
-) {
-
-    $primaryDriver =
-        "Heat Stress";
-
-} elseif (
-    $wind !== null &&
-    $wind >= 8
-) {
-
-    $primaryDriver =
-        "Strong Wind";
-
-}
+    !empty($riskDrivers)
+        ? $riskDrivers[0]
+        : 'No major climate risk detected';
 
 
 // ============================================================
-// 16. WHAT CHANGED?
+// 16. WHAT CHANGED
 // ============================================================
 
-$changes = [];
+$whatChanged = [];
 
 
 if (
-    $temperatureDifference !== null &&
-    abs($temperatureDifference) >= 1
+    isset(
+        $trends['temperature']['direction']
+    ) &&
+    $trends['temperature']['direction']
+        !== 'stable'
 ) {
 
-    if ($temperatureDifference > 0) {
-
-        $changes[] =
-            "Temperature is currently " .
-            round(
-                $temperatureDifference,
-                1
-            ) .
-            "°C above the recent average.";
-
-    } else {
-
-        $changes[] =
-            "Temperature is currently " .
-            round(
-                abs($temperatureDifference),
-                1
-            ) .
-            "°C below the recent average.";
-
-    }
-
+    $whatChanged[] =
+        'Temperature is '
+        . $trends['temperature']['direction'];
 }
 
 
 if (
-    $humidityDifference !== null &&
-    abs($humidityDifference) >= 5
+    isset(
+        $trends['humidity']['direction']
+    ) &&
+    $trends['humidity']['direction']
+        !== 'stable'
 ) {
 
-    if ($humidityDifference > 0) {
-
-        $changes[] =
-            "Humidity is currently " .
-            round(
-                $humidityDifference,
-                1
-            ) .
-            " percentage points above the recent average.";
-
-    } else {
-
-        $changes[] =
-            "Humidity is currently " .
-            round(
-                abs($humidityDifference),
-                1
-            ) .
-            " percentage points below the recent average.";
-
-    }
-
+    $whatChanged[] =
+        'Humidity is '
+        . $trends['humidity']['direction'];
 }
 
 
 if (
-    $temperatureTrend['direction'] ===
-    "Increasing"
+    isset(
+        $trends['wind_speed']['direction']
+    ) &&
+    $trends['wind_speed']['direction']
+        !== 'stable'
 ) {
 
-    $changes[] =
-        "Temperature is trending upward.";
-
+    $whatChanged[] =
+        'Airflow is '
+        . $trends['wind_speed']['direction'];
 }
 
 
-if (
-    $humidityTrend['direction'] ===
-    "Increasing"
-) {
+if (empty($whatChanged)) {
 
-    $changes[] =
-        "Humidity is trending upward.";
-
-}
-
-
-if (
-    $humidityTrend['direction'] ===
-    "Decreasing"
-) {
-
-    $changes[] =
-        "Humidity is trending downward.";
-
-}
-
-
-if (empty($changes)) {
-
-    $changes[] =
-        "No major climate shift was detected in the available observations.";
-
+    $whatChanged[] =
+        'Climate conditions are relatively stable';
 }
 
 
@@ -1210,104 +952,90 @@ if (empty($changes)) {
 // 17. CROP INTELLIGENCE
 // ============================================================
 
-$cropRisk =
-    "Low";
+$cropIntelligence = [
 
+    'temperature' => [
 
-$cropConcern =
-    "No major environmental stress detected.";
+        'value' =>
+            $temperature,
 
+        'status' =>
+            $temperatureStatus
 
-$cropAction =
-    "Continue normal monitoring.";
+    ],
 
+    'humidity' => [
 
-if (
-    $humidity !== null &&
-    $humidity >= 80 &&
-    $wind !== null &&
-    $wind <= 1
-) {
+        'value' =>
+            $humidity,
 
-    $cropRisk =
-        "Moderate";
+        'status' =>
+            $humidityStatus
 
+    ],
 
-    $cropConcern =
-        "High humidity combined with low airflow may increase moisture retention around crop foliage.";
+    'wind' => [
 
+        'value' =>
+            $wind,
 
-    $cropAction =
-        "Monitor foliage closely and improve airflow around crops where possible.";
+        'status' =>
+            $windStatus
 
-}
+    ]
 
-
-if (
-    $heatIndex !== null &&
-    $heatIndex >= 32
-) {
-
-    $cropRisk =
-        "High";
-
-
-    $cropConcern =
-        "Elevated heat conditions may increase crop water demand and heat stress.";
-
-
-    $cropAction =
-        "Monitor crop water requirements and signs of heat stress.";
-
-}
+];
 
 
 // ============================================================
 // 18. IRRIGATION INTELLIGENCE
 // ============================================================
 
-$irrigationStatus =
-    "Monitor";
-
-
-$irrigationRecommendation =
-    "Use soil moisture readings and crop requirements before irrigating.";
-
-
 if (
     $humidity !== null &&
-    $humidity >= 80 &&
-    $heatIndex !== null &&
-    $heatIndex < 30
+    $humidity >= 80
 ) {
 
     $irrigationStatus =
-        "Review";
+        'Monitor';
 
+    $irrigationMessage =
+        'High atmospheric humidity may reduce immediate irrigation demand.';
 
-    $irrigationRecommendation =
-        "Avoid automatically increasing irrigation solely because of climate conditions; check soil moisture first.";
-
-}
-
-
-if (
-    $heatIndex !== null &&
-    $heatIndex >= 32
+} elseif (
+    $humidity !== null &&
+    $humidity < 40
 ) {
 
     $irrigationStatus =
-        "High Attention";
+        'Consider';
 
+    $irrigationMessage =
+        'Low atmospheric humidity may increase plant water demand.';
 
-    $irrigationRecommendation =
-        "Check soil moisture more frequently because elevated heat may increase water demand.";
+} else {
 
+    $irrigationStatus =
+        'Normal';
+
+    $irrigationMessage =
+        'No strong atmospheric signal for immediate irrigation.';
 }
+
+
+$irrigationIntelligence = [
+
+    'status' =>
+        $irrigationStatus,
+
+    'message' =>
+        $irrigationMessage
+
+];
 
 
 // ============================================================
-// 19. INTELLIGENCE INSIGHTS
+// 19. INSIGHTS
 // ============================================================
 
 $insights = [];
@@ -1321,65 +1049,34 @@ if (
 ) {
 
     $insights[] =
-        "High humidity is currently occurring alongside very low airflow.";
+        'High humidity combined with low airflow may increase crop disease pressure.';
+}
 
-} elseif (
+
+if (
+    $temperature !== null &&
+    $temperature >= 32
+) {
+
+    $insights[] =
+        'Elevated temperature may increase plant water demand and heat stress.';
+}
+
+
+if (
     $humidity !== null &&
-    $humidity >= 80
+    $humidity < 40
 ) {
 
     $insights[] =
-        "Current humidity is high and may increase moisture retention around crops.";
-
-}
-
-
-if (
-    $temperatureTrend['direction'] ===
-    "Increasing"
-) {
-
-    $insights[] =
-        "Temperature is trending upward compared with the earlier observations.";
-
-}
-
-
-if (
-    $temperatureTrend['direction'] ===
-    "Decreasing"
-) {
-
-    $insights[] =
-        "Temperature is trending downward compared with the earlier observations.";
-
-}
-
-
-if (
-    $heatIndex !== null &&
-    $heatIndex >= 32
-) {
-
-    $insights[] =
-        "Elevated heat conditions have been detected.";
-
-}
-
-
-if ($lowWindPercentage >= 70) {
-
-    $insights[] =
-        "Low airflow has been persistent across most available observations.";
-
+        'Dry atmospheric conditions may increase water loss from plants.';
 }
 
 
 if (empty($insights)) {
 
     $insights[] =
-        "Current environmental conditions appear relatively stable.";
-
+        'Current climate conditions show no major immediate environmental warning.';
 }
 
 
@@ -1398,448 +1095,492 @@ if (
 ) {
 
     $recommendations[] =
-        "Monitor crop foliage and maintain airflow where possible.";
-
+        'Monitor plants closely for fungal or disease-related stress.';
 }
 
 
 if (
-    $temperatureTrend['direction'] ===
-    "Increasing"
+    $temperature !== null &&
+    $temperature >= 32
 ) {
 
     $recommendations[] =
-        "Monitor irrigation demand as temperature increases.";
-
+        'Check plant moisture and provide appropriate shade or irrigation if needed.';
 }
 
 
 if (
-    $heatIndex !== null &&
-    $heatIndex >= 32
+    $humidity !== null &&
+    $humidity < 40
 ) {
 
     $recommendations[] =
-        "Monitor crops for signs of heat stress and check soil moisture more frequently.";
-
-}
-
-
-if (
-    $wind !== null &&
-    $wind >= 8
-) {
-
-    $recommendations[] =
-        "Monitor exposed crops and irrigation efficiency during strong winds.";
-
+        'Monitor soil moisture because atmospheric dryness may increase water demand.';
 }
 
 
 if (empty($recommendations)) {
 
     $recommendations[] =
-        "Continue normal monitoring and compare future readings with the current baseline.";
-
+        'Continue normal monitoring and review new climate observations.';
 }
 
 
 // ============================================================
-// 21. EXPLAINABLE EVIDENCE
+// 21. EVIDENCE
 // ============================================================
 
-$evidence = [];
+$evidence = [
+
+    'observation_count' =>
+        count($observations),
+
+    'temperature_average' =>
+        $temperatureAverage !== null
+            ? round(
+                $temperatureAverage,
+                2
+            )
+            : null,
+
+    'humidity_average' =>
+        $humidityAverage !== null
+            ? round(
+                $humidityAverage,
+                2
+            )
+            : null,
+
+    'wind_average' =>
+        $windAverage !== null
+            ? round(
+                $windAverage,
+                2
+            )
+            : null,
+
+    'temperature_trend' =>
+        $trends['temperature'],
+
+    'humidity_trend' =>
+        $trends['humidity'],
+
+    'wind_trend' =>
+        $trends['wind_speed']
+
+];
 
 
-if ($humidity !== null) {
+// ============================================================
+// 21.5 MACHINE LEARNING PREDICTION
+// ============================================================
 
-    $evidence[] =
-        "Current humidity: " .
-        $humidity .
-        "%";
+$mlPrediction = null;
+
+$mlUrl =
+    'http://localhost/Bloombot/ml/ml_predict.php';
+
+
+$mlInput = [
+
+    'temperature' =>
+        $temperature,
+
+    'humidity' =>
+        $humidity,
+
+    'wind_speed' =>
+        $wind,
+
+    'heat_index' =>
+        $heatIndex,
+
+    'wet_bulb' =>
+        $wetBulb,
+
+    'solar_radiation' =>
+        $solar
+
+];
+
+
+if (
+    $temperature !== null &&
+    $humidity !== null &&
+    $wind !== null &&
+    $heatIndex !== null &&
+    $wetBulb !== null &&
+    $solar !== null
+) {
+
+    $ch =
+        curl_init(
+            $mlUrl
+        );
+
+
+    curl_setopt_array(
+
+        $ch,
+
+        [
+
+            CURLOPT_POST =>
+                true,
+
+            CURLOPT_POSTFIELDS =>
+                json_encode(
+                    $mlInput
+                ),
+
+            CURLOPT_RETURNTRANSFER =>
+                true,
+
+            CURLOPT_CONNECTTIMEOUT =>
+                5,
+
+            CURLOPT_TIMEOUT =>
+                15,
+
+            CURLOPT_HTTPHEADER =>
+                [
+
+                    'Content-Type: application/json',
+
+                    'Accept: application/json'
+
+                ]
+
+        ]
+
+    );
+
+
+    $mlResponse =
+        curl_exec(
+            $ch
+        );
+
+
+    $mlHttpCode =
+        curl_getinfo(
+            $ch,
+            CURLINFO_HTTP_CODE
+        );
+
+
+    $mlError =
+        curl_error(
+            $ch
+        );
+
+
+    curl_close(
+        $ch
+    );
+
+
+    if (
+        $mlResponse !== false &&
+        $mlHttpCode >= 200 &&
+        $mlHttpCode < 300
+    ) {
+
+        $decodedML =
+            json_decode(
+                $mlResponse,
+                true
+            );
+
+
+        if (
+            is_array($decodedML) &&
+            ($decodedML['status'] ?? '')
+                === 'success'
+        ) {
+
+            $mlPrediction =
+                $decodedML;
+
+        }
+
+    }
 
 }
-
-
-if ($wind !== null) {
-
-    $evidence[] =
-        "Current wind speed: " .
-        $wind .
-        " m/s";
-
-}
-
-
-if ($humidityAverage !== null) {
-
-    $evidence[] =
-        "Recent average humidity: " .
-        round(
-            $humidityAverage,
-            2
-        ) .
-        "%";
-
-}
-
-
-if ($temperatureAverage !== null) {
-
-    $evidence[] =
-        "Recent average temperature: " .
-        round(
-            $temperatureAverage,
-            2
-        ) .
-        "°C";
-
-}
-
-
-$evidence[] =
-    "Low airflow observed in " .
-    round(
-        $lowWindPercentage,
-        1
-    ) .
-    "% of observations";
 
 
 // ============================================================
 // 22. SOURCE INFORMATION
 // ============================================================
 
-$source =
-    $providerData['source']
-    ?? null;
+$sourceInformation = [
 
+    'name' =>
+        $source['name']
+        ?? 'Unknown',
 
-$dataQuality =
-    $providerData['data_quality']
-    ?? [];
+    'provider' =>
+        $source['provider']
+        ?? 'Unknown',
+
+    'source_type' =>
+        $source['source_type']
+        ?? $source['type']
+        ?? 'Unknown',
+
+    'data_type' =>
+        $source['data_type']
+        ?? 'Unknown',
+
+    'location' =>
+        $source['location']
+        ?? null,
+
+    'latitude' =>
+        $source['latitude']
+        ?? $latitude,
+
+    'longitude' =>
+        $source['longitude']
+        ?? $longitude
+
+];
 
 
 // ============================================================
 // 23. FINAL RESPONSE
 // ============================================================
 
-$output = [
+$response = [
 
-    "status" =>
-        "success",
+    'status' =>
+        'success',
 
+    'engine' =>
+        'BloomBot Climate Intelligence',
 
-    "engine" => [
+    'version' =>
+        '3.1',
 
-        "name" =>
-            "BloomBot Climate Intelligence",
-
-        "version" =>
-            "3.1",
-
-        "data_source" =>
-            $source['provider']
-            ?? "Unknown",
-
-        "source_type" =>
-            $source['type']
-            ?? $source['data_type']
-            ?? "Unknown",
-
-        "observations_analyzed" =>
-            $total
-
-    ],
+    'generated_at' =>
+        gmdate(
+            'Y-m-d\TH:i:s\Z'
+        ),
 
 
-    "location" => [
+    // --------------------------------------------------------
+    // LOCATION
+    // --------------------------------------------------------
 
-        "latitude" =>
+    'location' => [
+
+        'latitude' =>
             $latitude,
 
-        "longitude" =>
+        'longitude' =>
             $longitude
 
     ],
 
 
-    "source" =>
-        $source,
-
-        "observations" =>
-            $observations,
+    'monitoring_mode' =>
+        $monitoring_mode,
 
 
-    "timestamp" =>
-        $current['timestamp']
-        ?? null,
+    // --------------------------------------------------------
+    // SOURCE
+    // --------------------------------------------------------
+
+    'source' =>
+        $sourceInformation,
 
 
-    "current_conditions" => [
+    // --------------------------------------------------------
+    // CURRENT CONDITIONS
+    // --------------------------------------------------------
 
-        "temperature" => [
+    'current_conditions' => [
 
-            "value" =>
+        'temperature' => [
+
+            'value' =>
                 $temperature,
 
-            "unit" =>
-                "°C",
-
-            "status" =>
+            'status' =>
                 $temperatureStatus
 
         ],
 
+        'humidity' => [
 
-        "humidity" => [
-
-            "value" =>
+            'value' =>
                 $humidity,
 
-            "unit" =>
-                "%",
-
-            "status" =>
+            'status' =>
                 $humidityStatus
 
         ],
 
+        'wind' => [
 
-        "wind" => [
-
-            "value" =>
+            'value' =>
                 $wind,
 
-            "unit" =>
-                "m/s",
-
-            "status" =>
+            'status' =>
                 $windStatus
 
         ],
 
+        'heat_index' =>
+            $heatIndex,
 
-        "heat_index" => [
+        'wet_bulb' =>
+            $wetBulb,
 
-            "value" =>
-                $heatIndex,
+        'wet_bulb_globe' =>
+            $wetBulbGlobe,
 
-            "unit" =>
-                "°C",
-
-            "status" =>
-                $heatStatus
-
-        ],
-
-
-        "wet_bulb" => [
-
-            "value" =>
-                $wetBulb,
-
-            "unit" =>
-                "°C"
-
-        ],
-
-
-        "wet_bulb_globe" => [
-
-            "value" =>
-                $wetBulbGlobe,
-
-            "unit" =>
-                "°C"
-
-        ]
+        'solar_radiation' =>
+            $solar
 
     ],
 
 
-    "climate_health" => [
+    // --------------------------------------------------------
+    // CLIMATE HEALTH
+    // --------------------------------------------------------
 
-        "score" =>
-            $climateScore,
+    'climate_health' => [
 
-        "status" =>
-            $climateHealth,
+        'score' =>
+            $healthScore,
 
-        "reasons" =>
-            $scoreReasons
-
-    ],
-
-
-    "baseline" => [
-
-        "temperature_average" =>
-            $temperatureAverage !== null
-                ? round(
-                    $temperatureAverage,
-                    2
-                )
-                : null,
-
-        "humidity_average" =>
-            $humidityAverage !== null
-                ? round(
-                    $humidityAverage,
-                    2
-                )
-                : null,
-
-        "wind_average" =>
-            $windAverage !== null
-                ? round(
-                    $windAverage,
-                    2
-                )
-                : null,
-
-        "heat_index_average" =>
-            $heatAverage !== null
-                ? round(
-                    $heatAverage,
-                    2
-                )
-                : null
+        'status' =>
+            $healthStatus
 
     ],
 
 
-    "trends" => [
+    // --------------------------------------------------------
+    // RISK
+    // --------------------------------------------------------
 
-        "temperature" =>
-            $temperatureTrend,
+    'risk' => [
 
-        "humidity" =>
-            $humidityTrend,
-
-        "wind" =>
-            $windTrend
-
-    ],
-
-
-    "persistence" => [
-
-        "high_humidity_percentage" =>
-            round(
-                $highHumidityPercentage,
-                1
-            ),
-
-        "very_high_humidity_percentage" =>
-            round(
-                $veryHighHumidityPercentage,
-                1
-            ),
-
-        "low_wind_percentage" =>
-            round(
-                $lowWindPercentage,
-                1
-            )
-
-    ],
-
-
-    "what_changed" =>
-        $changes,
-
-
-    "risk" => [
-
-        "score" =>
+        'score' =>
             $riskScore,
 
-        "level" =>
+        'level' =>
             $riskLevel,
 
-        "primary_driver" =>
+        'primary_driver' =>
             $primaryDriver,
 
-        "factors" =>
-            $riskFactors
+        'drivers' =>
+            $riskDrivers
 
     ],
 
 
-    "crop_intelligence" => [
+    // --------------------------------------------------------
+    // MACHINE LEARNING
+    // --------------------------------------------------------
 
-        "risk" =>
-            $cropRisk,
-
-        "concern" =>
-            $cropConcern,
-
-        "recommended_action" =>
-            $cropAction
-
-    ],
+    'ml_prediction' =>
+        $mlPrediction,
 
 
-    "irrigation" => [
+    // --------------------------------------------------------
+    // TRENDS
+    // --------------------------------------------------------
 
-        "status" =>
-            $irrigationStatus,
-
-        "recommendation" =>
-            $irrigationRecommendation
-
-    ],
+    'trends' =>
+        $trends,
 
 
-    "intelligence" => [
+    // --------------------------------------------------------
+    // BASELINES
+    // --------------------------------------------------------
 
-        "insights" =>
-            $insights,
-
-        "recommendations" =>
-            $recommendations,
-
-        "evidence" =>
-            $evidence
-
-    ],
+    'baselines' =>
+        $baselines,
 
 
-    "solar" => [
+    // --------------------------------------------------------
+    // WHAT CHANGED
+    // --------------------------------------------------------
 
-        "visible" =>
-            $solar,
-
-        "infrared" =>
-            $infrared,
-
-        "uv" =>
-            $uv
-
-    ],
+    'what_changed' =>
+        $whatChanged,
 
 
-    "data_quality" => [
+    // --------------------------------------------------------
+    // CROP INTELLIGENCE
+    // --------------------------------------------------------
 
-        "rainfall_interpretation" =>
-            $dataQuality['rainfall_interpretation']
-            ?? "Not available",
+    'crop_intelligence' =>
+        $cropIntelligence,
 
-        "ml_prediction" =>
-            "Not yet enabled",
 
-        "source_type" =>
-            $dataQuality['source_type']
+    // --------------------------------------------------------
+    // IRRIGATION INTELLIGENCE
+    // --------------------------------------------------------
+
+    'irrigation_intelligence' =>
+        $irrigationIntelligence,
+
+
+    // --------------------------------------------------------
+    // INSIGHTS
+    // --------------------------------------------------------
+
+    'insights' =>
+        $insights,
+
+
+    // --------------------------------------------------------
+    // RECOMMENDATIONS
+    // --------------------------------------------------------
+
+    'recommendations' =>
+        $recommendations,
+
+
+    // --------------------------------------------------------
+    // EVIDENCE
+    // --------------------------------------------------------
+
+    'evidence' =>
+        $evidence,
+
+
+    // --------------------------------------------------------
+    // OBSERVATIONS
+    // --------------------------------------------------------
+
+    'observations' =>
+        $observations,
+
+
+    // --------------------------------------------------------
+    // DATA QUALITY
+    // --------------------------------------------------------
+
+    'data_quality' => [
+
+        'observation_count' =>
+            count($observations),
+
+        'source_type' =>
+            $sourceDataQuality['source_type']
+            ?? $sourceInformation['source_type'],
+
+        'direct_sensor_measurement' =>
+            $sourceDataQuality['direct_sensor_measurement']
             ?? null,
 
-        "direct_sensor_measurement" =>
-            $dataQuality['direct_sensor_measurement']
-            ?? null,
-
-        "note" =>
-            $dataQuality['note']
-            ?? "Climate intelligence currently uses transparent rule-based analysis of normalized environmental observations."
+        'ml_prediction' =>
+            $mlPrediction
 
     ]
 
@@ -1848,11 +1589,10 @@ $output = [
 
 echo json_encode(
 
-    $output,
+    $response,
 
     JSON_PRETTY_PRINT |
     JSON_UNESCAPED_UNICODE
 
 );
-
-?>
+ ?>
