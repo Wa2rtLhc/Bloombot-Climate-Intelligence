@@ -39,26 +39,27 @@ $result = $stmt->get_result();
 <html>
 <head>
     <title>My Plants - Bloombot</title>
-    <link rel="stylesheet" href="CSS/style.css">
-    <style>
-        .plant-list {
-            max-width: 900px;
-            margin: 40px auto;
-            background: #f9f9f9;
-            padding: 25px;
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        }
-        .plant {
-            background: white;
-            padding: 20px;
-            margin-bottom: 15px;
-            border-left: 5px solid #4CAF50;
-            border-radius: 8px;
-        }
-        .plant h3 { margin: 0; color: #2c7a5d; }
-        .plant p { margin: 5px 0; }
-        .no-plants { text-align: center; padding: 30px; color: #888; }
+    <link rel="stylesheet" href="CSS/style.css?v=7">
+<style>
+    .plant-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+    }
+    .plant {
+        border: 1px solid #ce4242;
+        padding: 15px;
+        width: 300px;
+        border-radius: 8px;
+        background-color: #1d1717;
+    }
+    .plant h3 {
+        margin-top: 0;
+    }
+    .no-plants {
+        font-size: 18px;
+        color: #555;
+    }
     </style>
 </head>
 <body>

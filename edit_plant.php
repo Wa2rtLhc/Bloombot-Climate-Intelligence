@@ -52,7 +52,7 @@ if (isset($_POST['submit'])) {
 <html>
 <head>
     <title>Edit Plant</title>
-    <link rel="stylesheet" href="CSS/style.css?v=4">
+    <link rel="stylesheet" href="CSS/style.css?v=7">
 </head>
 <body>
     <h2>Edit Plant</h2>

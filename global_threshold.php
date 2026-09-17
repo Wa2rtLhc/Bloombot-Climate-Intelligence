@@ -1,3 +1,4 @@
+
 <?php
 include 'db_connect.php'; // Database connection
 session_start();
@@ -34,7 +35,7 @@ if (isset($_POST['update'])) {
 <html>
 <head>
     <title>Configure Global Thresholds</title>
-    <link rel="stylesheet" href="CSS/style.css?v=4">
+    <link rel="stylesheet" href="CSS/style.css?v=7">
 </head>
 <body>
     <h2>Global Threshold Settings</h2>

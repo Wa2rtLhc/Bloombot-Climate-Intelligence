@@ -284,7 +284,7 @@ $conn->close();
 
     <link
         rel="stylesheet"
-        href="CSS/style.css"
+        href="CSS/style.css?v=7"
     >
 
 </head>

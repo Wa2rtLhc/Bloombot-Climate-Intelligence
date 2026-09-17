@@ -54,7 +54,7 @@ $conn->close();
 <html>
 <head>
     <title>Edit User</title>
-    <link rel="stylesheet" href="CSS/style.css?v=4">
+    <link rel="stylesheet" href="CSS/style.css?v=7">
 </head>
 <body>
     <h2>Edit User</h2>

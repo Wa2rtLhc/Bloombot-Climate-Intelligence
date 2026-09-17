@@ -53,53 +53,12 @@ $result = $stmt->get_result();
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+     <link
+        rel="stylesheet"
+        href="CSS/style.css?v=7"
+    >
     <title>All Alerts - Bloombot</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 40px;
-            background-color: #f9f9f9;
-        }
-        h2 {
-            margin-bottom: 10px;
-        }
-        .btn {
-            text-decoration: none;
-            background-color: rgb(33, 243, 128);
-            color: white;
-            padding: 10px 15px;
-            border-radius: 5px;
-            margin-bottom: 15px;
-            display: inline-block;
-        }
-        .btn:hover {
-            background-color: rgb(25, 210, 118);
-        }
-        form {
-            margin-bottom: 20px;
-        }
-        input, button {
-            padding: 7px;
-            margin-right: 10px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background-color: white;
-        }
-        th, td {
-            padding: 12px;
-            border-bottom: 1px solid #ccc;
-            text-align: left;
-        }
-        th {
-            background-color: #4CAF50;
-            color: white;
-        }
-        tr:hover {
-            background-color: #f1f1f1;
-        }
-    </style>
+    
 </head>
 <body>
 

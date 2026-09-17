@@ -74,7 +74,7 @@ while ($row = $result->fetch_assoc()) {
 <head>
     <meta charset="UTF-8">
     <title>Admin Dashboard - Bloombot</title>
-    <link rel="stylesheet" href="CSS/style.css?v=5">
+    <link rel="stylesheet" href="CSS/style.css?v=7">
     <style>
         table {
             width: 100%;

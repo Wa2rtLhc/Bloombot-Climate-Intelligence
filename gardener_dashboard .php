@@ -54,7 +54,16 @@ if ($sensor_query && mysqli_num_rows($sensor_query) > 0) {
         $sensor_data[] = $row;
     }
 }
-
+/*
+|--------------------------------------------------------------------------
+| LIVE CLIMATE OBSERVATIONS
+|--------------------------------------------------------------------------
+| These are populated from Climate Intelligence for each plant.
+| sensor_data remains reserved for direct plant-sensor measurements.
+|--------------------------------------------------------------------------
+*/
+$climate_observations = [];
+$plant_climate_data = [];
 $recentAlertsQuery = "
     SELECT n.message, n.timestamp, p.name AS plant_name 
     FROM notifications n
@@ -73,14 +82,365 @@ $recentAlerts = [];
 while ($row = $result->fetch_assoc()) {
     $recentAlerts[] = $row['plant_name'] . ": " . $row['message'];
 }
+
+
+/*
+|--------------------------------------------------------------------------
+| LOAD GARDENER PLANTS
+|--------------------------------------------------------------------------
+| We load plant climate intelligence BEFORE rendering the dashboard.
+| This ensures that Recent Climate Observations, charts and plant cards
+| all use the same live climate data.
+|--------------------------------------------------------------------------
+*/
+
+$plants = [];
+
+$plant_query = mysqli_query(
+    $conn,
+    "SELECT *
+     FROM plants
+     WHERE gardener_username = '$username'
+     ORDER BY id DESC"
+);
+
+if ($plant_query && mysqli_num_rows($plant_query) > 0) {
+
+    while ($plant = mysqli_fetch_assoc($plant_query)) {
+
+        $plant_id = (int)$plant['id'];
+
+        $plant_name = $plant['name'];
+
+        $plant_latitude =
+            $plant['latitude'] ?? null;
+
+        $plant_longitude =
+            $plant['longitude'] ?? null;
+
+        $plant_monitoring_mode =
+            $plant['monitoring_mode']
+            ?? 'environmental_station';
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | DEFAULT CLIMATE VALUES
+        |--------------------------------------------------------------------------
+        */
+
+        $plant_climate_data[$plant_id] = null;
+
+        $plant['climate_intelligence'] = null;
+
+        $plant['climate_error'] = null;
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | GET CLIMATE INTELLIGENCE
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            is_numeric($plant_latitude) &&
+            is_numeric($plant_longitude)
+        ) {
+
+            $intelligence_file =
+                __DIR__ . '/climate_intelligence.php';
+
+            if (file_exists($intelligence_file)) {
+
+                try {
+
+                    $protocol =
+                        (
+                            isset($_SERVER['HTTPS']) &&
+                            $_SERVER['HTTPS'] !== 'off'
+                        )
+                        ? 'https'
+                        : 'http';
+
+                    $host =
+                        $_SERVER['HTTP_HOST'];
+
+                    $base_path =
+                        dirname($_SERVER['SCRIPT_NAME']);
+
+                    $intelligence_url =
+                        $protocol .
+                        '://' .
+                        $host .
+                        $base_path .
+                        '/climate_intelligence.php?' .
+                        http_build_query([
+                            'latitude' =>
+                                $plant_latitude,
+
+                            'longitude' =>
+                                $plant_longitude,
+
+                            'monitoring_mode' =>
+                                $plant_monitoring_mode
+                        ]);
+
+
+                    $ch =
+                        curl_init(
+                            $intelligence_url
+                        );
+
+                    curl_setopt(
+                        $ch,
+                        CURLOPT_RETURNTRANSFER,
+                        true
+                    );
+
+                    curl_setopt(
+                        $ch,
+                        CURLOPT_FOLLOWLOCATION,
+                        true
+                    );
+
+                    curl_setopt(
+                        $ch,
+                        CURLOPT_TIMEOUT,
+                        30
+                    );
+
+
+                    $intelligence_output =
+                        curl_exec($ch);
+
+                    $http_code =
+                        curl_getinfo(
+                            $ch,
+                            CURLINFO_HTTP_CODE
+                        );
+
+                    curl_close($ch);
+
+
+                    if (
+                        $intelligence_output === false
+                    ) {
+
+                        $plant['climate_error'] =
+                            'Unable to connect to the climate intelligence engine.';
+
+                    } elseif (
+                        $http_code !== 200
+                    ) {
+
+                        $plant['climate_error'] =
+                            'Climate intelligence returned HTTP ' .
+                            $http_code . '.';
+
+                    } else {
+
+                        $decoded =
+                            json_decode(
+                                trim($intelligence_output),
+                                true
+                            );
+
+
+                        if (
+                            is_array($decoded) &&
+                            ($decoded['status'] ?? '') === 'success'
+                        ) {
+
+                            $plant_climate_data[$plant_id] =
+                                $decoded;
+
+                            $plant['climate_intelligence'] =
+                                $decoded;
+
+
+                            /*
+                            |--------------------------------------------------------------------------
+                            | STORE LIVE OBSERVATIONS
+                            |--------------------------------------------------------------------------
+                            */
+
+                            $observations =
+                                $decoded['observations']
+                                ?? [];
+
+
+                            foreach (
+                                $observations
+                                as $observation
+                            ) {
+
+                                $climate_observations[] = [
+
+                                    'plant_id' =>
+                                        $plant_id,
+
+                                    'plant_name' =>
+                                        $plant['name'],
+
+                                    'source' =>
+                                        $decoded['source']['name']
+                                        ?? 'Environmental source',
+
+                                    'timestamp' =>
+                                        $observation['timestamp']
+                                        ?? null,
+
+                                    'temperature' =>
+                                        isset(
+                                            $observation['temperature']
+                                        ) &&
+                                        is_numeric(
+                                            $observation['temperature']
+                                        )
+                                        ? (float)
+                                          $observation['temperature']
+                                        : null,
+
+                                    'humidity' =>
+                                        isset(
+                                            $observation['humidity']
+                                        ) &&
+                                        is_numeric(
+                                            $observation['humidity']
+                                        )
+                                        ? (float)
+                                          $observation['humidity']
+                                        : null,
+
+                                    'wind_speed' =>
+                                        isset(
+                                            $observation['wind_speed']
+                                        ) &&
+                                        is_numeric(
+                                            $observation['wind_speed']
+                                        )
+                                        ? (float)
+                                          $observation['wind_speed']
+                                        : null,
+
+                                    'moisture' =>
+                                        isset(
+                                            $observation['soil_moisture']
+                                        ) &&
+                                        is_numeric(
+                                            $observation['soil_moisture']
+                                        )
+                                        ? (float)
+                                          $observation['soil_moisture']
+                                        : null,
+
+                                    'light_level' =>
+                                        isset(
+                                            $observation['solar_radiation']
+                                        ) &&
+                                        is_numeric(
+                                            $observation['solar_radiation']
+                                        )
+                                        ? (float)
+                                          $observation['solar_radiation']
+                                        : null
+                                ];
+                            }
+
+                        } else {
+
+                            $plant['climate_error'] =
+                                $decoded['message']
+                                ?? 'Climate intelligence returned an invalid response.';
+                        }
+                    }
+
+                } catch (Throwable $e) {
+
+                    $plant['climate_error'] =
+                        'Climate intelligence is temporarily unavailable.';
+                }
+
+            } else {
+
+                $plant['climate_error'] =
+                    'Climate intelligence engine not found.';
+            }
+
+        } else {
+
+            $plant['climate_error'] =
+                'Plant location is not configured.';
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | STORE PLANT
+        |--------------------------------------------------------------------------
+        */
+
+        $plants[] = $plant;
+    }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| SORT CLIMATE OBSERVATIONS
+|--------------------------------------------------------------------------
+*/
+
+usort(
+    $climate_observations,
+    function ($a, $b) {
+
+        return strcmp(
+            $b['timestamp'] ?? '',
+            $a['timestamp'] ?? ''
+        );
+    }
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| SELECT A DASHBOARD CLIMATE INTELLIGENCE RESULT
+|--------------------------------------------------------------------------
+| Used by the main Climate Intelligence KPI section.
+| The plant-specific cards below still use their own climate data.
+|--------------------------------------------------------------------------
+*/
+
+$climate_intelligence = null;
+
+if (!empty($plants)) {
+
+    foreach ($plants as $plant) {
+
+        if (
+            isset($plant['climate_intelligence']) &&
+            is_array($plant['climate_intelligence']) &&
+            ($plant['climate_intelligence']['status'] ?? '') === 'success'
+        ) {
+
+            $climate_intelligence =
+                $plant['climate_intelligence'];
+
+            break;
+        }
+    }
+}
+
 ?>
 <!DOCTYPE html><html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>Gardener Dashboard - Bloombot</title>
     <meta http-equiv="refresh" content="200">
-    <link rel="stylesheet" href="CSS/style.css?v=6">
+    <link rel="stylesheet" href="CSS/style.css?v=7">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
 </head>
 <body><div class="topnav">
     <a href="gardener_dashboard .php">Dashboard</a>
@@ -100,6 +460,7 @@ while ($row = $result->fetch_assoc()) {
         <a class="menu-button" href="add_plant.php">🌿 Add Plants</a>
         <a class="menu-button" href="set_threshold.php">⚙ Set Thresholds</a>
         <a class="menu-button" href="view_alerts.php">🔔 View Alerts</a>
+        <a class="menu-button" href="view_plants.php">🌱 View My Plants</a>
         <a class="menu-button" href="sensor_data.php">📊 View Sensor Data</a>
         <a class="menu-button" href="profile.php">👤 Profile</a>
         <a class="menu-button" href="gardener_settings.html"> ⚙ Settings</a>
@@ -310,160 +671,161 @@ while ($row = $result->fetch_assoc()) {
         </div>
     <?php endif; ?>
 
-    <h3>Recent Sensor Readings</h3>
-    <?php if (!empty($sensor_data)): ?>
-        <table border="1" width="100%" cellpadding="8" cellspacing="0">
-            <tr style="background-color: #2c7a5d; color: white;">
-                <th>Plant Name</th>
-                <th>Temperature (°C)</th>
-                <th>Moisture (%)</th>
-                <th>Light Level (%)</th>
-                <th>Timestamp</th>
-            </tr>
-            <?php foreach ($sensor_data as $row): ?>
-                <tr>
-                    <td><?= htmlspecialchars($row['plant_name']) ?></td>
-                    <td><?= htmlspecialchars($row['temperature']) ?></td>
-                    <td><?= htmlspecialchars($row['moisture']) ?></td>
-                    <td><?= htmlspecialchars($row['light_level']) ?></td>
-                    <td><?= htmlspecialchars($row['timestamp']) ?></td>
-                </tr>
-            <?php endforeach; ?>
-        </table>
-    <?php else: ?>
-        <p>No sensor data found for your plants.</p>
-    <?php endif; ?>
+ <h3>Recent Climate Observations</h3>
+
+<?php if (!empty($climate_observations)): ?>
+
+<table border="1"
+       width="100%"
+       cellpadding="8"
+       cellspacing="0">
+
+    <tr style="background-color:#2c7a5d;color:white;">
+
+        <th>Plant</th>
+        <th>Source</th>
+        <th>Temperature (°C)</th>
+        <th>Humidity (%)</th>
+        <th>Airflow (m/s)</th>
+        <th>Timestamp</th>
+
+    </tr>
+
+    <?php
+
+    /*
+     * Show the newest observations first.
+     */
+    usort(
+        $climate_observations,
+        function ($a, $b) {
+            return strcmp(
+                $b['timestamp'] ?? '',
+                $a['timestamp'] ?? ''
+            );
+        }
+    );
+
+    /*
+     * Only show the latest 10 observations.
+     */
+    $recent_climate_observations =
+        array_slice($climate_observations, 0, 10);
+
+    ?>
+
+    <?php foreach ($recent_climate_observations as $observation): ?>
+
+    <tr>
+
+        <td>
+            <?= htmlspecialchars(
+                $observation['plant_name']
+            ) ?>
+        </td>
+
+        <td>
+            <?= htmlspecialchars(
+                $observation['source']
+            ) ?>
+        </td>
+
+        <td>
+            <?= $observation['temperature'] !== null
+                ? htmlspecialchars(
+                    $observation['temperature']
+                )
+                : '—'
+            ?>
+        </td>
+
+        <td>
+            <?= $observation['humidity'] !== null
+                ? htmlspecialchars(
+                    $observation['humidity']
+                )
+                : '—'
+            ?>
+        </td>
+
+        <td>
+            <?= $observation['wind_speed'] !== null
+                ? htmlspecialchars(
+                    $observation['wind_speed']
+                )
+                : '—'
+            ?>
+        </td>
+
+        <td>
+            <?= htmlspecialchars(
+                $observation['timestamp'] ?? '—'
+            ) ?>
+        </td>
+
+    </tr>
+
+    <?php endforeach; ?>
+
+</table>
+
+<?php else: ?>
+
+<p>
+    No live climate observations are currently available.
+</p>
+
+<?php endif; ?>
 
     <div class="chart-box">
-        <h3>Sensor Data Chart (Last 5 Readings)</h3>
+        <h3>Live Climate Trend</h3>
+
+<p>
+    Climate observations from the active monitoring source.
+</p>
         <canvas id="sensorChart" width="100%" height="40"></canvas>
     </div>
 
    <h2>Your Plants & BloomBot Assessments</h2>
 
-<?php
+<?php if (!empty($plants)): ?>
 
-$plant_query = mysqli_query(
-    $conn,
-    "SELECT * FROM plants
-     WHERE gardener_username = '$username'
-     ORDER BY id DESC"
-);
+    <?php foreach ($plants as $plant): ?>
 
-if (mysqli_num_rows($plant_query) > 0):
+        <?php
 
-    while ($plant = mysqli_fetch_assoc($plant_query)):
+        $plant_id =
+            (int)$plant['id'];
 
-        $plant_id = (int)$plant['id'];
-        $plant_name = $plant['name'];
-        $plant_type = $plant['type'];
-        $plant_location = $plant['location'];
-        $plant_latitude = $plant['latitude'] ?? null;
-$plant_longitude = $plant['longitude'] ?? null;
-$plant_monitoring_mode = $plant['monitoring_mode'] ?? 'environmental_station';
+        $plant_name =
+            $plant['name'];
 
-$climate_intelligence = null;
-$climate_error = null;
+        $plant_type =
+            $plant['type'];
 
-if (
-    is_numeric($plant_latitude) &&
-    is_numeric($plant_longitude)
-) {
+        $plant_location =
+            $plant['location'];
 
-    $intelligence_file = __DIR__ . '/climate_intelligence.php';
+        $plant_latitude =
+            $plant['latitude'] ?? null;
 
-    if (file_exists($intelligence_file)) {
+        $plant_longitude =
+            $plant['longitude'] ?? null;
 
-        try {
+        $plant_monitoring_mode =
+            $plant['monitoring_mode']
+            ?? 'environmental_station';
 
-            $protocol = (
-                isset($_SERVER['HTTPS']) &&
-                $_SERVER['HTTPS'] !== 'off'
-            ) ? 'https' : 'http';
-
-            $host = $_SERVER['HTTP_HOST'];
-
-            $intelligence_url =
-                $protocol .
-                '://' .
-                $host .
-                dirname($_SERVER['SCRIPT_NAME']) .
-                '/climate_intelligence.php?' .
-                http_build_query([
-                    'latitude' => $plant_latitude,
-                    'longitude' => $plant_longitude,
-                    'monitoring_mode' => $plant_monitoring_mode
-                ]);
-
-            $ch = curl_init($intelligence_url);
-
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-
-            $intelligence_output = curl_exec($ch);
-
-            $http_code = curl_getinfo(
-                $ch,
-                CURLINFO_HTTP_CODE
-            );
-
-            $curl_error = curl_error($ch);
-
-            curl_close($ch);
-
-            if ($intelligence_output === false) {
-
-                $climate_error =
-                    'Unable to connect to the climate intelligence engine.';
-
-            } elseif ($http_code !== 200) {
-
-                $climate_error =
-                    'Climate intelligence returned HTTP ' .
-                    $http_code . '.';
-
-            } else {
-
-                $climate_intelligence =
-                    json_decode(
-                        trim($intelligence_output),
-                        true
-                    );
-
-                if (
-                    !is_array($climate_intelligence) ||
-                    ($climate_intelligence['status'] ?? '') !== 'success'
-                ) {
-
-                    $climate_error =
-                        $climate_intelligence['message']
-                        ?? 'Climate intelligence returned an invalid response.';
-
-                    $climate_intelligence = null;
-                }
-            }
-
-        } catch (Throwable $e) {
-
-            $climate_intelligence = null;
-
-            $climate_error =
-                'Climate intelligence is temporarily unavailable.';
-        }
-
-    } else {
+        $climate_intelligence =
+            $plant['climate_intelligence']
+            ?? null;
 
         $climate_error =
-            'Climate intelligence engine not found.';
-    }
+            $plant['climate_error']
+            ?? null;
 
-} else {
-
-    $climate_error =
-        'Plant location is not configured.';
-}
-
+        ?>
+       <?php
         /*
         |--------------------------------------------------------------------------
         | GET PLANT THRESHOLDS
@@ -1005,11 +1367,9 @@ if (
 
 <?php
 
-    endwhile;
+    endforeach; ?>
 
-else:
-
-?>
+<?php else: ?>
 
 <p>You have no plants added yet.</p>
 
@@ -1023,14 +1383,22 @@ else:
 </div><?php
 $timestamps = [];
 $temperatures = [];
-$moistures = [];
-$light_levels = [];
+$humidities = [];
+$wind_speeds = [];
 
-foreach ($sensor_data as $data) {
-    $timestamps[] = $data['timestamp'];
-    $temperatures[] = $data['temperature'];
-    $moistures[] = $data['moisture'];
-    $light_levels[] = $data['light_level'];
+foreach ($climate_observations as $observation) {
+
+    $timestamps[] =
+        $observation['timestamp'];
+
+    $temperatures[] =
+        $observation['temperature'];
+
+    $humidities[] =
+        $observation['humidity'];
+
+    $wind_speeds[] =
+        $observation['wind_speed'];
 }
 ?><script>
 const ctx = document.getElementById('sensorChart').getContext('2d');
@@ -1038,36 +1406,50 @@ const sensorChart = new Chart(ctx, {
     type: 'line',
     data: {
         labels: <?= json_encode($timestamps) ?>,
-        datasets: [
-            {
-                label: 'Temperature (°C)',
-                data: <?= json_encode($temperatures) ?>,
-                borderColor: 'rgba(255, 99, 132, 1)',
-                fill: false,
-                tension: 0.3
-            },
-            {
-                label: 'Moisture (%)',
-                data: <?= json_encode($moistures) ?>,
-                borderColor: 'rgba(54, 162, 235, 1)',
-                fill: false,
-                tension: 0.3
-            },
-            {
-                label: 'Light Level (%)',
-                data: <?= json_encode($light_levels) ?>,
-                borderColor: 'rgba(255, 206, 86, 1)',
-                fill: false,
-                tension: 0.3
-            }
-        ]
+       datasets: [
+    {
+        label: 'Temperature (°C)',
+
+        data: <?= json_encode($temperatures) ?>,
+
+        borderColor: 'rgba(255, 99, 132, 1)',
+
+        fill: false,
+
+        tension: 0.3
+    },
+
+    {
+        label: 'Humidity (%)',
+
+        data: <?= json_encode($humidities) ?>,
+
+        borderColor: 'rgba(54, 162, 235, 1)',
+
+        fill: false,
+
+        tension: 0.3
+    },
+
+    {
+        label: 'Airflow (m/s)',
+
+        data: <?= json_encode($wind_speeds) ?>,
+
+        borderColor: 'rgba(75, 192, 120, 1)',
+
+        fill: false,
+
+        tension: 0.3
+    }
+]
     },
     options: {
         responsive: true,
         plugins: {
             title: {
                 display: true,
-                text: 'Latest Sensor Readings'
+                text: 'Live Climate Trend'
             },
             legend: {
                 position: 'top'

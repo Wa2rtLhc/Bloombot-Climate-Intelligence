@@ -39,7 +39,7 @@ $user = $result->fetch_assoc();
 <head>
     <meta charset="UTF-8">
     <title>Edit Profile - Bloombot</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=7">
     <style>
         .edit-container {
             max-width: 600px;
