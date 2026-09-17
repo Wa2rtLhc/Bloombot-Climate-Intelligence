@@ -39,45 +39,103 @@ $weather = null;
 // ===============================
 // BLOOMBOT CLIMATE INTELLIGENCE
 // ===============================
+
 $climate_intelligence = null;
 $climate_error = null;
 
-$intelligence_url = __DIR__ . '/climate_intelligence.php';
+$intelligence_file = __DIR__ . '/climate_intelligence.php';
 
-if (file_exists($intelligence_url)) {
-
-    ob_start();
+if (file_exists($intelligence_file)) {
 
     try {
 
-        include $intelligence_url;
+        /*
+         * climate_intelligence.php outputs JSON directly.
+         * We therefore execute it through a local HTTP request
+         * instead of including it directly in this page.
+         */
 
-        $intelligence_output = ob_get_clean();
+        $protocol = (
+            isset($_SERVER['HTTPS']) &&
+            $_SERVER['HTTPS'] !== 'off'
+        ) ? 'https' : 'http';
 
-        $climate_intelligence = json_decode(
-            trim($intelligence_output),
-            true
-        );
+        $host = $_SERVER['HTTP_HOST'];
 
-        if (
-            !is_array($climate_intelligence) ||
-            ($climate_intelligence['status'] ?? '') !== 'success'
-        ) {
-            $climate_error = 'Climate intelligence returned an invalid response.';
-            $climate_intelligence = null;
+        $intelligence_url =
+            $protocol .
+            '://' .
+            $host .
+            dirname($_SERVER['SCRIPT_NAME']) .
+            '/climate_intelligence.php';
+
+
+        $ch = curl_init($intelligence_url);
+
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+        $intelligence_output =
+            curl_exec($ch);
+
+        $http_code =
+            curl_getinfo(
+                $ch,
+                CURLINFO_HTTP_CODE
+            );
+
+        $curl_error =
+            curl_error($ch);
+
+        curl_close($ch);
+
+
+        if ($intelligence_output === false) {
+
+            $climate_error =
+                'Unable to connect to the climate intelligence engine.';
+
+        } elseif ($http_code !== 200) {
+
+            $climate_error =
+                'Climate intelligence returned HTTP ' .
+                $http_code .
+                '.';
+
+        } else {
+
+            $climate_intelligence =
+                json_decode(
+                    trim($intelligence_output),
+                    true
+                );
+
+
+            if (
+                !is_array($climate_intelligence) ||
+                ($climate_intelligence['status'] ?? '') !== 'success'
+            ) {
+
+                $climate_error =
+                    'Climate intelligence returned an invalid response.';
+
+                $climate_intelligence = null;
+            }
         }
 
     } catch (Throwable $e) {
 
-        ob_end_clean();
-
-        $climate_error = 'Climate intelligence is temporarily unavailable.';
         $climate_intelligence = null;
+
+        $climate_error =
+            'Climate intelligence is temporarily unavailable.';
     }
 
 } else {
 
-    $climate_error = 'Climate intelligence engine not found.';
+    $climate_error =
+        'Climate intelligence engine not found.';
 }
 
 // Fetch latest sensor data including plant name
@@ -380,52 +438,554 @@ while ($row = $result->fetch_assoc()) {
         <canvas id="sensorChart" width="100%" height="40"></canvas>
     </div>
 
-    <h2>Your Plants and Status</h2>
-    <?php
-    $plant_query = mysqli_query($conn, "SELECT * FROM plants WHERE gardener_username = '$username'");
-    if (mysqli_num_rows($plant_query) > 0):
-        while ($plant = mysqli_fetch_assoc($plant_query)):
-            $plant_id = $plant['id'];
-            $plant_name = $plant['name'];
-            $sensor_sql = "SELECT * FROM sensor_data WHERE plant_id = $plant_id ORDER BY timestamp DESC LIMIT 1";
-            $sensor_res = mysqli_query($conn, $sensor_sql);
-            $sensor = mysqli_fetch_assoc($sensor_res);
-            $threshold_sql = "SELECT * FROM thresholds WHERE plant_id = $plant_id LIMIT 1";
-            $threshold_res = mysqli_query($conn, $threshold_sql);
-            $plant_threshold = mysqli_fetch_assoc($threshold_res);
+   <h2>Your Plants & BloomBot Assessments</h2>
 
-           
-            $status = "Healthy";
-            if ($sensor) {
-                if ($plant_threshold) {
-                    if ($sensor['moisture'] < $plant_threshold['moisture_min']) {
-                        $status = "Needs Water";
-                    } elseif ($sensor['temperature'] < $plant_threshold['temperature_min']) {
-                        $status = "Too Cold";
-                    } elseif ($sensor['temperature'] > $plant_threshold['temperature_max']) {
-                        $status = "Too Hot";
-                    } elseif ($sensor['light_level'] < $plant_threshold['light_min']) {
-                        $status = "Too Dark";
-                    } elseif ($sensor['light_level'] > $plant_threshold['light_max']) {
-                        $status = "Too Bright";
-                    }
+<?php
+
+$plant_query = mysqli_query(
+    $conn,
+    "SELECT * FROM plants
+     WHERE gardener_username = '$username'
+     ORDER BY id DESC"
+);
+
+if (mysqli_num_rows($plant_query) > 0):
+
+    while ($plant = mysqli_fetch_assoc($plant_query)):
+
+        $plant_id = (int)$plant['id'];
+        $plant_name = $plant['name'];
+        $plant_type = $plant['type'];
+        $plant_location = $plant['location'];
+
+        /*
+        |--------------------------------------------------------------------------
+        | GET PLANT THRESHOLDS
+        |--------------------------------------------------------------------------
+        */
+
+        $threshold_sql = "
+            SELECT *
+            FROM thresholds
+            WHERE plant_id = $plant_id
+            LIMIT 1
+        ";
+
+        $threshold_res = mysqli_query($conn, $threshold_sql);
+
+        $plant_threshold = $threshold_res
+            ? mysqli_fetch_assoc($threshold_res)
+            : null;
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | CHECK FOR REAL / EXISTING SENSOR DATA FIRST
+        |--------------------------------------------------------------------------
+        */
+
+        $sensor_sql = "
+            SELECT *
+            FROM sensor_data
+            WHERE plant_id = $plant_id
+            ORDER BY timestamp DESC
+            LIMIT 1
+        ";
+
+        $sensor_res = mysqli_query($conn, $sensor_sql);
+
+        $sensor = $sensor_res
+            ? mysqli_fetch_assoc($sensor_res)
+            : null;
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | DEFAULT PLANT ASSESSMENT
+        |--------------------------------------------------------------------------
+        */
+
+        $plant_status = "Monitoring";
+        $plant_status_class = "monitoring";
+
+        $assessment_source = "Live environmental assessment";
+
+        $temperature_value = null;
+        $humidity_value = null;
+        $wind_value = null;
+
+        $assessment_message =
+            "BloomBot is monitoring the current environmental conditions.";
+
+        $recommended_action =
+            "Continue monitoring your plant and check soil moisture before watering.";
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | IF LIVE CLIMATE INTELLIGENCE IS AVAILABLE
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            is_array($climate_intelligence) &&
+            ($climate_intelligence['status'] ?? '') === 'success'
+        ) {
+
+            $temperature_value =
+                $climate_intelligence['current_conditions']['temperature']['value']
+                ?? null;
+
+            $humidity_value =
+                $climate_intelligence['current_conditions']['humidity']['value']
+                ?? null;
+
+            $wind_value =
+                $climate_intelligence['current_conditions']['wind']['value']
+                ?? null;
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | START WITH THE GLOBAL CLIMATE RISK
+            |--------------------------------------------------------------------------
+            */
+
+            $global_risk =
+                $climate_intelligence['risk']['level']
+                ?? 'Moderate';
+
+            $plant_status = $global_risk;
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | PLANT-SPECIFIC TEMPERATURE CHECK
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+                $plant_threshold &&
+                is_numeric($temperature_value)
+            ) {
+
+                $temperature_min =
+                    isset($plant_threshold['temperature_min'])
+                    ? (float)$plant_threshold['temperature_min']
+                    : null;
+
+                $temperature_max =
+                    isset($plant_threshold['temperature_max'])
+                    ? (float)$plant_threshold['temperature_max']
+                    : null;
+
+
+                if (
+                    $temperature_min !== null &&
+                    $temperature_value < $temperature_min
+                ) {
+
+                    $plant_status = "Too Cold";
+                    $plant_status_class = "cold";
+
+                    $assessment_message =
+                        "The current environmental temperature is below the preferred minimum for this plant.";
+
+                    $recommended_action =
+                        "Monitor the plant closely and consider whether additional warmth or protection is needed.";
+
+                } elseif (
+                    $temperature_max !== null &&
+                    $temperature_value > $temperature_max
+                ) {
+
+                    $plant_status = "Too Hot";
+                    $plant_status_class = "hot";
+
+                    $assessment_message =
+                        "The current environmental temperature is above the preferred maximum for this plant.";
+
+                    $recommended_action =
+                        "Monitor for heat stress and reduce excessive heat exposure where possible.";
+
                 } else {
-                    $status = "No Thresholds Set";
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | TEMPERATURE IS WITHIN RANGE — CHECK CLIMATE RISK
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if ($global_risk === 'Critical') {
+
+                        $plant_status = "Critical";
+                        $plant_status_class = "critical";
+
+                    } elseif ($global_risk === 'High') {
+
+                        $plant_status = "High Risk";
+                        $plant_status_class = "high";
+
+                    } elseif ($global_risk === 'Moderate') {
+
+                        $plant_status = "Moderate";
+                        $plant_status_class = "moderate";
+
+                    } else {
+
+                        $plant_status = "Favorable";
+                        $plant_status_class = "good";
+                    }
+
+
+                    $assessment_message =
+                        "Temperature is currently within the plant's configured range. BloomBot is also evaluating the wider climate conditions.";
+
+                    $recommended_action =
+                        $climate_intelligence['crop_intelligence']['recommended_action']
+                        ?? "Continue monitoring the plant.";
                 }
-            } else {
-                $status = "No Sensor Data";
             }
-    ?>
-            <div style="border: 1px solid #ccc; padding: 10px; margin-bottom: 10px;">
-                <h3><?= htmlspecialchars($plant_name) ?></h3>
-                <p><strong>Status:</strong> <?= $status ?></p>
-                <?php if ($sensor): ?>
-                    <p><strong>Last Reading:</strong> Temp: <?= $sensor['temperature'] ?>°C, Moisture: <?= $sensor['moisture'] ?>%, Light: <?= $sensor['light_level'] ?>%</p>
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | NO THRESHOLDS
+            |--------------------------------------------------------------------------
+            */
+
+            elseif (!$plant_threshold) {
+
+                $plant_status = $global_risk;
+
+                if ($global_risk === 'Critical') {
+                    $plant_status_class = "critical";
+                } elseif ($global_risk === 'High') {
+                    $plant_status_class = "high";
+                } elseif ($global_risk === 'Moderate') {
+                    $plant_status_class = "moderate";
+                } else {
+                    $plant_status_class = "good";
+                }
+
+                $assessment_message =
+                    "Live climate data is available, but this plant does not have configured thresholds.";
+
+                $recommended_action =
+                    "Set plant thresholds so BloomBot can provide a more specific assessment.";
+            }
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | HUMIDITY + LOW AIRFLOW WARNING
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+                is_numeric($humidity_value) &&
+                is_numeric($wind_value) &&
+                $humidity_value >= 80 &&
+                $wind_value <= 1
+            ) {
+
+                $plant_status = "Humidity Risk";
+                $plant_status_class = "high";
+
+                $assessment_message =
+                    "High humidity combined with very low airflow may increase moisture retention around foliage.";
+
+                $recommended_action =
+                    "Monitor foliage closely and improve airflow around the plant where possible.";
+            }
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | REAL SENSOR DATA OVERRIDES THE ENVIRONMENTAL FALLBACK
+        |--------------------------------------------------------------------------
+        */
+
+        if ($sensor) {
+
+            $assessment_source = "Plant sensor data";
+
+            $sensor_temperature =
+                isset($sensor['temperature'])
+                ? (float)$sensor['temperature']
+                : null;
+
+            $sensor_moisture =
+                isset($sensor['moisture'])
+                ? (float)$sensor['moisture']
+                : null;
+
+            $sensor_light =
+                isset($sensor['light_level'])
+                ? (float)$sensor['light_level']
+                : null;
+
+
+            if ($plant_threshold) {
+
+                if (
+                    $sensor_moisture !== null &&
+                    $sensor_moisture < $plant_threshold['moisture_min']
+                ) {
+
+                    $plant_status = "Needs Water";
+                    $plant_status_class = "water";
+
+                    $assessment_message =
+                        "The plant sensor indicates that soil moisture is below the configured minimum.";
+
+                    $recommended_action =
+                        "Check the soil and water the plant if the reading is confirmed.";
+
+                } elseif (
+                    $sensor_temperature !== null &&
+                    $sensor_temperature < $plant_threshold['temperature_min']
+                ) {
+
+                    $plant_status = "Too Cold";
+                    $plant_status_class = "cold";
+
+                } elseif (
+                    $sensor_temperature !== null &&
+                    $sensor_temperature > $plant_threshold['temperature_max']
+                ) {
+
+                    $plant_status = "Too Hot";
+                    $plant_status_class = "hot";
+
+                } elseif (
+                    $sensor_light !== null &&
+                    $sensor_light < $plant_threshold['light_min']
+                ) {
+
+                    $plant_status = "Too Dark";
+                    $plant_status_class = "moderate";
+
+                } elseif (
+                    $sensor_light !== null &&
+                    $sensor_light > $plant_threshold['light_max']
+                ) {
+
+                    $plant_status = "Too Bright";
+                    $plant_status_class = "moderate";
+
+                } else {
+
+                    $plant_status = "Healthy";
+                    $plant_status_class = "good";
+
+                    $assessment_message =
+                        "The latest plant sensor readings are within the configured thresholds.";
+
+                    $recommended_action =
+                        "Continue monitoring the plant normally.";
+                }
+            }
+        }
+
+?>
+
+<div class="plant-intelligence-card">
+
+    <div class="plant-card-header">
+
+        <div>
+            <span class="plant-eyebrow">🌱 PLANT PROFILE</span>
+
+            <h3>
+                <?= htmlspecialchars($plant_name) ?>
+            </h3>
+
+            <p>
+                <?= htmlspecialchars($plant_type) ?>
+                •
+                <?= htmlspecialchars($plant_location) ?>
+            </p>
+        </div>
+
+        <span class="plant-status <?= htmlspecialchars($plant_status_class) ?>">
+            <?= htmlspecialchars($plant_status) ?>
+        </span>
+
+    </div>
+
+
+    <div class="plant-data-grid">
+
+        <div class="plant-data-item">
+
+            <span>🌡️ Temperature</span>
+
+            <strong>
+                <?php if ($sensor && isset($sensor['temperature'])): ?>
+
+                    <?= htmlspecialchars($sensor['temperature']) ?>°C
+
+                <?php elseif ($temperature_value !== null): ?>
+
+                    <?= htmlspecialchars($temperature_value) ?>°C
+
+                <?php else: ?>
+
+                    —
+
                 <?php endif; ?>
-            </div>
-    <?php endwhile; else: ?>
-        <p>You have no plants added yet.</p>
+            </strong>
+
+            <small>
+                <?php if ($sensor): ?>
+                    Plant sensor
+                <?php else: ?>
+                    Live environment
+                <?php endif; ?>
+            </small>
+
+        </div>
+
+
+        <div class="plant-data-item">
+
+            <span>💧 Humidity</span>
+
+            <strong>
+
+                <?php if ($humidity_value !== null): ?>
+
+                    <?= htmlspecialchars($humidity_value) ?>%
+
+                <?php else: ?>
+
+                    —
+
+                <?php endif; ?>
+
+            </strong>
+
+            <small>
+                Live environment
+            </small>
+
+        </div>
+
+
+        <div class="plant-data-item">
+
+            <span>💨 Airflow</span>
+
+            <strong>
+
+                <?php if ($wind_value !== null): ?>
+
+                    <?= htmlspecialchars($wind_value) ?> m/s
+
+                <?php else: ?>
+
+                    —
+
+                <?php endif; ?>
+
+            </strong>
+
+            <small>
+                Live environment
+            </small>
+
+        </div>
+
+
+        <div class="plant-data-item">
+
+            <span>🧠 Data Source</span>
+
+            <strong>
+                Live
+            </strong>
+
+            <small>
+                <?= htmlspecialchars($assessment_source) ?>
+            </small>
+
+        </div>
+
+    </div>
+
+
+    <div class="plant-assessment">
+
+        <div>
+
+            <strong>
+                BloomBot Assessment
+            </strong>
+
+            <p>
+                <?= htmlspecialchars($assessment_message) ?>
+            </p>
+
+        </div>
+
+        <div class="plant-action">
+
+            <strong>
+                Recommended action
+            </strong>
+
+            <p>
+                <?= htmlspecialchars($recommended_action) ?>
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <?php if ($plant_threshold): ?>
+
+    <div class="plant-threshold-note">
+
+        <span>⚙️</span>
+
+        <span>
+            Personalised using this plant's configured thresholds.
+        </span>
+
+    </div>
+
+    <?php else: ?>
+
+    <div class="plant-threshold-note warning">
+
+        <span>⚠️</span>
+
+        <span>
+            No plant thresholds configured.
+            <a href="set_threshold.php">Configure thresholds</a>
+            for a more specific assessment.
+        </span>
+
+    </div>
+
     <?php endif; ?>
+
+</div>
+
+<?php
+
+    endwhile;
+
+else:
+
+?>
+
+<p>You have no plants added yet.</p>
+
+<?php endif; ?>
 </div>
 
 <div id="popup-alert"style="display:none; position:fixed; bottom:20px; right:20px;background-color:red;  padding:15px; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.3); z-index:9999;">
